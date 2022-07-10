@@ -1,0 +1,17 @@
+charset, UTF-8
+msglang, japanese
+
+dic, includes\main.dic
+dic, includes\functions.dic
+dic, includes\tags.dic
+dic, includes\loader.dic
+dic, includes\writer.dic
+
+iolog, off
+//log, log.txt
+
+fncdepth, 128
+
+checkparser, off
+
+save.auto, off

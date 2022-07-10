@@ -1,0 +1,1944 @@
+//------------------------------------------------
+// テンプレートタグ
+//------------------------------------------------
+
+// タグの開始記号
+#define  C_TAG_START      '{'
+#define  C_TAG_LEN_START  1
+#define  C_TAG_REG_START  '\{'
+// タグの終了記号
+#define  C_TAG_END        '}'
+#define  C_TAG_LEN_END    1
+#define  C_TAG_REG_END    '\}'
+
+//-----------------------------------------------
+// コードの断片の中にあるタグを処理する
+/*
+	[0] 評価するコード					_code
+	[1] 親タグの名前					_parenttagname
+	[2] 親タグのモディファイア			_parentmodifier
+	[3] コンテキストのタイプ			_contexttype
+	[4] コンテキストのモディファイア	_contextmodifier
+
+	コンテキストのモディファイアというのは、
+	蓄積されたモディファイアという方が正しいかもしれない
+
+*/
+/*
+	ブロックタグがネストしていると
+	コンテキストのモディファイアが蓄積されることがあるので
+	[3]と[4]が必要になる
+	蓄積しているなら[2]は[4]にも含まれ必要ないように思えるが、
+	親タグによって挙動が代わるケースもあるかもしれないため
+
+	このあたりMovable Typeはかなり変態的な使い方もできるよう
+	作られていると思われるが、
+	sinonomeの場合はもっとしシンプルでいいと思う
+	なんだったらコンテキストを変数に保存して指定できたりしてもいいと思う
+*/
+
+
+//書き込む前にエスケープした内容を復元する
+Tags_Escape_Fukugen {
+	_c = _argv[0]
+	_c = REPLACE(_c, '__C_TaG_StArT_' + C_STARTTIME + '__'  , C_TAG_START)
+	_c = REPLACE(_c, '__C_TaG_EnD_' + C_STARTTIME + '__'    , C_TAG_END)
+	_c = REPLACE(_c, '__C_TaG_StArT2_' + C_STARTTIME + '__' , C_TAG_START)
+	_c = REPLACE(_c, '__C_TaG_EnD2_' + C_STARTTIME + '__'   , C_TAG_END)
+	//_c = REPLACE(_c, '__tag_start__', C_TAG_START)
+	//_c = REPLACE(_c, '__tag_end__', C_TAG_END)
+	//_c = REPLACE(_c, C_TAG_START+'sample-root'+C_TAG_END, C_TAG_START+'root'+C_TAG_END)
+
+	//以下はタグの形式で書けるエスケープ記述
+	//扱いに迷っているためまだドキュメントには書いていない
+	//_c = REPLACE(_c, C_TAG_START+'tagstart'+C_TAG_END , C_TAG_START) //タグ開始記号
+	//_c = REPLACE(_c, C_TAG_START+'tagend'+C_TAG_END   , C_TAG_END) //タグ終了記号
+	//_c = REPLACE(_c, C_TAG_START+'#'+C_TAG_END        , '#') // 「#」記号
+
+	_c
+}
+//*body、*more系は中にループタグを書くと永遠に再帰してしまう可能性あり
+//開始記号と終了記号をエスケープして回避する
+//※実体参照に変換することも考えたが、*HTMLとは限らない*ので却下
+
+TmplTag_Escape {
+	_c = _argv[0]
+	_c = REPLACE(_c, C_TAG_START + C_TAG_START , '__C_TaG_StArT2_' + C_STARTTIME + '__')
+	_c = REPLACE(_c, C_TAG_END + C_TAG_END     , '__C_TaG_EnD2_' + C_STARTTIME + '__')
+
+	_c = REPLACE(_c, C_TAG_START , '__C_TaG_StArT_' + C_STARTTIME + '__')
+	_c = REPLACE(_c, C_TAG_END   , '__C_TaG_EnD_' + C_STARTTIME + '__')
+
+	//ただし暫定的にrootだけはエスケープしない（処理される）
+	_c = REPLACE(_c, '__C_TaG_StArT_' + C_STARTTIME + '__' + 'root' + '__C_TaG_EnD_' + C_STARTTIME + '__', C_TAG_START + 'root' + C_TAG_END )
+	_c
+}
+
+
+#define		C_ERROR_MSG_NOENDTAG		'終了タグが見つかりません'
+#define		C_ERROR_MSG_TOODEEPSAMETAGNEST		'同じタグによる入れ子が深すぎます'
+e_noendtag{
+	LOGGING2('<ERROR> ' + _argv[0] + ' ' + C_ERROR_MSG_NOENDTAG)
+}
+e_toodeepsametagnest{
+	LOGGING2('<ERROR> ' + _argv[0] + ' ' + C_ERROR_MSG_TOODEEPNEST)
+}
+
+//メタ情報からデータを取り出す部分は関数化を試したがどうしてもわずかに遅くなる
+//そんなに可読性で困っているわけでもないので直書きで
+Tags_Interpret {
+	_code = _argv[0]
+
+	_parenttagname = _argv[1] //親タグの名前
+	_parentmodifier = _argv[2]
+	if !_parentmodifier { _parentmodifier = '' }
+	_contexttype = _argv[3] //entry archive webpage indexなど（詳細は未検討）
+	_contextmodifier = _argv[4]
+
+	while 1{
+
+		//if !RE_SEARCH(_code, C_TAG_REG_START + '(.*?)' + C_TAG_REG_END){
+		//	break
+		//}
+		////タグが存在する 解釈してその個所を置き換える
+		//_tagstartpos = RE_GETPOS[0]
+		//_tagstrlen = RE_GETLEN[0]
+		//_tagnobracketstr = RE_GETSTR[1]
+
+		//↓faster
+
+		_tagstartpos = IARRAY;_tagstrlen = -1;_tagnobracketstr = ''
+		_pos_a =  STRSTR(_code, C_TAG_START, 0)
+		if _pos_a < 0 { break }
+		_pos_b =  STRSTR(_code, C_TAG_END, _pos_a)
+		if _pos_b < 0 { break }
+		if _pos_a < _pos_b {
+			_tagstartpos = _pos_a
+			_tagstrlen = _pos_b - _pos_a + C_TAG_LEN_START
+			_tagnobracketstr = SUBSTR(_code, _pos_a + C_TAG_LEN_START, _pos_b - _pos_a - C_TAG_LEN_START)
+		}
+
+
+
+		//タグ名を取得 _myname
+		//タグとモディファイアは必ず半角スペース1つ以上で区切られる
+		_tagdata = SPLIT(_tagnobracketstr,' ',2)
+//		_tagdata = RE_SPLIT(_tagnobracketstr,'\s+')
+		_myname = _tagdata[0]
+
+		//モディファイアを取得 _mymod
+		//検索しやすくするために前後に半角スペースを1つずつつける
+		_mymod = _tagdata[1]
+		if !_mymod { _mymod = '' }
+
+		//タグ名をチェック
+		//ブロックタグのタグ名の場合は開始タグから終了タグまでを取得して
+		//その区間を再帰的に解釈
+		//if 0 <= STRSTR(' ignore if tags entries pages archives setvarblock setvartemplate entryprev entrynext pageprev pagenext loop ',' ' + _myname + ' ',0){
+		if ' '+_myname+' ' _in_ ' ignore if tags entries pages archives setvarblock setvartemplate entryprev entrynext pageprev pagenext loop ' {
+			//ブロックタグである
+
+			_endpos = -1
+
+			//終了タグの位置を検索
+			//なんとなく入れ子非対応タイプが速そうに思えるので
+			//ifは同じタグが入れ子になりうるので入れ子対応タイプで検索して
+			//それ以外は入れ子を考慮しないタイプで検索しようと思っていたが
+			//検証してみると100記事で最大50msくらいしか違わない
+			//
+			//if _myname != 'if' {
+			//	//入れ子対応でないタイプ
+			//	_endpos = STRSTR(_code, C_TAG_START + '/' + _myname + C_TAG_END, _pos[0])
+			//	if _endpos < 0 { break } // 終了タグが存在しないのでエラーとして返す予定
+			//} else {
+			// ==========================================================================
+			// 入れ子対応タイプ
+				_searchstartpos = _tagstartpos + 1
+				_tmp_s_count = 1; _tmp_e_count = 0; _nestdepth = 0; _noendtag = 0
+				_maxnestdepth = 100
+				while (_nestdepth ++) < _maxnestdepth {
+					_tmppos_s = STRSTR(_code, C_TAG_START + _myname , _searchstartpos)
+					_tmppos_e = STRSTR(_code, C_TAG_START + '/' + _myname + C_TAG_END, _searchstartpos)
+					if _tmppos_e < 0 {
+						//開始終了数が対応しないまま終了タグが不足 強制break
+						_noendtag = 1
+						break
+					} elseif _tmppos_s >= 0 {
+						// 開始終了どちらもある
+						if _tmppos_s < _tmppos_e {
+							// 開始タグの方が早い
+							_tmp_s_count ++
+							_searchstartpos = _tmppos_s + 1
+						} else {
+							// 終了タグの方が早い
+							_tmp_e_count ++
+							_searchstartpos = _tmppos_e + 1
+						}
+					} else {
+						//開始タグがなく、終了タグはある
+						_tmp_e_count ++
+						_searchstartpos = _tmppos_e + 1
+					}
+					if _tmp_s_count == _tmp_e_count {
+						_endpos = _tmppos_e
+						break
+					}
+				}
+				if _noendtag {
+					e_noendtag(_myname)
+					break
+				}
+				if _nestdepth >= _maxnestdepth {
+					e_toodeepsametagnest(_myname)
+					break
+				}
+			//}
+			// ==========================================================================
+
+			//終了タグが存在した
+			_startpos = _tagstartpos + _tagstrlen
+			_endpos --
+
+			//開始タグから終了タグまでの間（両タグ含まず）を取得
+			_part = SUBSTR(_code, _startpos, _endpos - _startpos + 1)
+			_part2 = ''
+			//ここからはタグによって処理が異なるのでタグ名で分岐
+
+			/////////////////////////////////////////////////////////////////
+			//{if}
+			//条件分岐する
+			if _myname == 'if'{
+
+				//モディファイアから情報を取得
+				_m_name = getModifierVal('name', '', 'STR', _mymod)
+				_m_eq = getModifierVal('eq', 'n/a'+C_STARTTIME, 'STR', _mymod)
+				_m_ne = getModifierVal('ne', 'n/a'+C_STARTTIME, 'STR', _mymod)
+				//_m_eqvar=getModifierVal('eqvar','','STR',_mymod)
+				_s = SPLIT(_part, C_TAG_START + 'else' + C_TAG_END, 2)
+				if ARRAYSIZE(_s) < 2 { _s[1] = '' }
+				_m_name2 = Tags_VarCollection_GetVar(_m_name)
+				//if _m_eqvar != '' && _m_name2 == Tags_VarCollection_GetVar(_m_eqvar){
+				//	_part2=_s[0]
+				//} elseif _m_name2 == _m_eq{
+				if _m_eq != 'n/a'+C_STARTTIME {
+					if _m_name2 == _m_eq { _part2 = _s[0] }
+					else { _part2 = _s[1] }
+				} elseif _m_ne != 'n/a'+C_STARTTIME {
+					if _m_name2 != _m_ne { _part2 = _s[0] }
+					else { _part2 = _s[1] }
+				} else {
+					_part2 = _s[0]
+				}
+				//_part2 = 'DEBUG'
+			}
+			//{ignore}
+			//コメントアウト　ignoreと同じ
+			elseif _myname == 'ignore'{
+				_part2 = ''
+			}
+			//{tags}
+			//タグを出力する
+			elseif _myname == 'tags'{
+
+				_m_offset = 0
+				_m_limit = C_ALMOST_INFINITE
+
+				_target_tags = G_TAGS
+				_target_tag_names = IARRAY
+				//エントリコンテキスト内ではそのエントリのタグ
+				if _contexttype == C_CTXTTYPE_ENTRY {
+					//エントリのindex
+					_m_index = getModifierVal('index', -1, 'INT', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY/*||_contexttype == C_CTXTTYPE_ARCHIVE*/])
+					if RE_SEARCH(G_ENTRYMETA[_m_index], C_LF + 'TAG: (.*?)' + C_LF){
+						_set_tagnames = RE_GETSTR[1]
+						_target_tag_names = SPLIT(_set_tagnames, ',')
+					}
+				} else {
+					//それ以外は全てのタグ
+					foreach G_TAGS; _t {
+						_target_tag_names ,= SPLIT(_t, ',')[0]
+					}
+				}
+
+				//archive_typeをtagarchiveにして渡す
+				//archivelinkなども解釈されるようになる
+				//仕様としてどうなのかという悩みはあるが
+				//こうしないとタグ一覧にリンクを付けるときに
+				//archivelinkでない別のタグが必要になってしまう
+				foreach _target_tag_names; _target_t {
+					for _i = 0; _i < ARRAYSIZE(G_TAGS); _i++ {
+						if STRSTR(G_TAGS[_i], _target_t + ',', 0) == 0 {
+							_part2+=Tags_Interpret(/
+								_part,/
+								_myname,/
+								_mymod,/
+								C_CTXTTYPE_TAG,/
+								' index=' + C_DQ + _i + C_DQ + ' '/
+									+	' archive_type=' + C_DQ + 'tagarchive' + C_DQ + ' '/
+							)
+							break
+						}
+					}
+				}
+			}
+			//{entries}
+			//記事を出力する
+			elseif _myname == 'entries'{
+
+				_m_offset = 0
+				_m_limit = C_ALMOST_INFINITE
+				_m_tag = ''
+
+				_m_tag = getModifierVal('tag', _m_tag, 'STR', _mymod,('',_contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY])
+
+				_m_offset = getModifierVal('offset', _m_offset, 'INT', _mymod, ('',_contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY||_contexttype == C_CTXTTYPE_ARCHIVE])
+				_m_limit = getModifierVal('limit', _m_limit, 'INT',_mymod,('',_contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY||_contexttype == C_CTXTTYPE_ARCHIVE])
+
+				if _contexttype == C_CTXTTYPE_ENTRY || _contexttype == C_CTXTTYPE_ARCHIVE {
+
+					//_m_indexには記事ファイルのインデックスが入っている（ARCHIVEのコンテキストなので）
+					_m_index = getModifierVal('index', -1, 'INT', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY || _contexttype == C_CTXTTYPE_ARCHIVE] )
+					//if RE_SEARCH(C_LF + G_ENTRYMETA[_m_index] + C_LF, C_LF + 'SYS_DATAFILEINDEX: (.*?)' + C_LF){
+					//_tmpi=TOINT(RE_GETSTR[1])
+
+					_tmpi = _m_index
+
+					//_m_offset = 0
+					if _m_offset > G_ENTRYFILES_ENTRYCOUNT[_tmpi] {
+						_m_offset = G_ENTRYFILES_ENTRYCOUNT[_tmpi] - 1
+					}
+					if _m_limit >= G_ENTRYFILES_ENTRYCOUNT[_tmpi] - _m_offset {
+						_m_limit = G_ENTRYFILES_ENTRYCOUNT[_tmpi] - _m_offset
+					}
+					//_m_limit = G_ENTRYFILES_ENTRYCOUNT[_tmpi]
+					for _zzzz=0;_zzzz<_tmpi;_zzzz++ {
+						_m_offset += G_ENTRYFILES_ENTRYCOUNT[_zzzz];
+					}
+				}
+
+				//モディファイアから情報を取得
+				_m_archivetype = getModifierVal('archive_type','','STR',_mymod,('',_contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY||_contexttype == C_CTXTTYPE_ARCHIVE])
+				_m_index = getModifierVal('index',0,'INT',_mymod,('',_contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY||_contexttype == C_CTXTTYPE_ARCHIVE])
+				//forループの上限値
+				//配列のサイズを超えていないかチェックし適正に設定し直す
+
+				if _m_tag {
+					_m_index = -1
+					foreach G_TAGS;_t {
+						_m_index ++
+						if _m_tag == CUTSPACE(_t[1, ',']) { break }
+					}
+
+					_taged_entry_index = IARRAY()
+
+					_m_tag = G_TAGS[_m_index]
+					//_m_tag = SPLIT(_m_tag, ',', 2)[0]
+					_m_tag = TRIM(_m_tag[0, ','])
+					_m_tag = ',' + _m_tag + ','
+					//_taged_entry_index = IARRAY;
+					for _m = 0; _m < ARRAYSIZE(G_ENTRYMETA); _m++{
+						if RE_SEARCH(G_ENTRYMETA[_m],C_LF + 'TAG: (.*?)' + C_LF){
+							_tag = RE_GETSTR[1]
+							_tag = ',' + _tag + ','
+							if _m_tag _in_ _tag{
+								_taged_entry_index ,= _m
+							}
+						}
+					}
+
+					_for_endcount=_m_limit + _m_offset
+					if ARRAYSIZE(_taged_entry_index)<_for_endcount{
+						_for_endcount=ARRAYSIZE(_taged_entry_index)
+					}
+					_taged_entry_index2 = IARRAY()
+					for _n = _m_offset; _n < _for_endcount; _n ++ {
+						_taged_entry_index2 ,= _taged_entry_index[_n]
+					}
+
+					foreach _taged_entry_index2 ; _j{
+						_part2+=Tags_Interpret(/
+							_part,/
+							_myname,/
+							_mymod,/
+							C_CTXTTYPE_ENTRY,/
+							' index=' + C_DQ + _j + C_DQ + ' '/
+						)
+					}
+
+
+
+				}
+				elseif _m_archivetype == 'tagarchive'{
+
+					_taged_entry_index = IARRAY()
+
+					_m_xentryindexes = getModifierVal('x-entryindexes', '', 'STR', _mymod, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY||_contexttype == C_CTXTTYPE_ARCHIVE])
+
+					if _m_xentryindexes {
+
+						_taged_entry_index = SPLIT(_m_xentryindexes, ',');
+
+					} else {
+						_m_tag = G_TAGS[_m_index]
+						//_m_tag = SPLIT(_m_tag, ',', 2)[0]
+						_m_tag = TRIM(_m_tag[0, ','])
+						_m_tag = ',' + _m_tag + ','
+						//_taged_entry_index = IARRAY;
+						for _m = 0; _m < ARRAYSIZE(G_ENTRYMETA); _m++{
+							if RE_SEARCH(G_ENTRYMETA[_m],C_LF + 'TAG: (.*?)' + C_LF){
+								_tag = RE_GETSTR[1]
+								_tag = ',' + _tag + ','
+								if _m_tag _in_ _tag{
+									_taged_entry_index ,= _m
+								}
+							}
+						}
+
+						_for_endcount=_m_limit + _m_offset
+						if ARRAYSIZE(_taged_entry_index)<_for_endcount{
+							_for_endcount=ARRAYSIZE(_taged_entry_index)
+						}
+					}
+
+					foreach _taged_entry_index ; _j{
+						_part2+=Tags_Interpret(/
+							_part,/
+							_myname,/
+							_mymod,/
+							C_CTXTTYPE_ENTRY,/
+							' index=' + C_DQ + _j + C_DQ + ' '/
+						)
+					}
+				}else{
+					_for_endcount=_m_limit + _m_offset
+					if ARRAYSIZE(G_ENTRYMETA)<_for_endcount{
+						_for_endcount=ARRAYSIZE(G_ENTRYMETA)
+					}
+					for _j=_m_offset;_j<_for_endcount;_j++{
+						_part2+=Tags_Interpret(/
+							_part,/
+							_myname,/
+							_mymod,/
+							C_CTXTTYPE_ENTRY,/
+							' index=' + C_DQ + _j + C_DQ + ' '/
+						)
+					}
+				}
+			}
+			//{pages}
+			//ページを出力する
+			elseif _myname == 'pages'{
+
+				_m_offset = 0
+				_m_limit = C_ALMOST_INFINITE
+				_m_file = ''
+
+				//モディファイアから情報を取得
+				//※fileを指定している場合offsetとlimitが代入されるが
+				//　fileを指定しつつlimitも指定している（最初だけ出すとか）という用法がある
+				_m_offset=getModifierVal('offset',_m_offset,'INT',_mymod,('',_contextmodifier)[_contexttype == C_CTXTTYPE_WEBPAGE])
+				_m_limit=getModifierVal('limit',_m_limit,'INT',_mymod,('',_contextmodifier)[_contexttype == C_CTXTTYPE_WEBPAGE])
+
+				_m_file = getModifierVal('file', _m_file, 'STR', _mymod,('',_contextmodifier)[_contexttype == C_CTXTTYPE_WEBPAGE])
+//				_m_file = getModifierVal('file', _m_file, 'STR', _mymod,'')
+
+				//_flag_i_set_file = 0
+
+				//ファイルを指定した時点でコンテキストのモディファイアは無効になる？
+				//その場合は_contextmodifierに空文字列代入？
+				//要検証
+				//あとentryの方にも同様に作った方がいいのだろうか？
+				//というかwebpagfeとentryの違いはタグアーカイブがあるかどうかくらいなので
+				//処理は同じにしてしまってもいいと思われる
+				if _m_file != '' {
+
+					//_flag_i_set_file = 1
+
+
+					_f_idx = 0
+					foreach G_WEBPAGEFILES_META; _meta {
+						if RE_SEARCH(C_LF + _meta + C_LF, C_LF + 'SYS_DATAFILE_FILENAME: (.*?)' + C_LF){
+							if _m_file == RE_GETSTR[1] {break}
+						}
+						_f_idx++
+					}
+					_tmpi=_f_idx
+					//_m_offset = 0
+					//for _zzzz=0;_zzzz<_tmpi;_zzzz++ {
+					//	_m_offset += G_WEBPAGEFILES_WEBPAGECOUNT[_zzzz];
+					//}
+					//_m_limit = G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi]
+
+					if _m_offset > G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] {
+						_m_offset = G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] - 1
+					}
+					if _m_limit >= G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] - _m_offset {
+						_m_limit = G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] - _m_offset
+					}
+					for _zzzz=0;_zzzz<_tmpi;_zzzz++ {
+						_m_offset += G_WEBPAGEFILES_WEBPAGECOUNT[_zzzz];
+					}
+
+
+				}
+
+				//webpageのコンテキスト内の場合、その投稿の属するファイル内でのループ
+				elseif _contexttype == C_CTXTTYPE_WEBPAGE {
+					_m_index=getModifierVal('index',-1,'INT',_parentmodifier,('',_contextmodifier)[_contexttype == C_CTXTTYPE_WEBPAGE])
+					if RE_SEARCH(C_LF + G_WEBPAGEMETA[_m_index] + C_LF, C_LF + 'SYS_DATAFILEINDEX: (.*?)' + C_LF){
+						_tmpi=TOINT(RE_GETSTR[1])
+						//_m_offset = 0
+
+						if _m_offset > G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] {
+							_m_offset = G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] - 1
+						}
+						if _m_limit >= G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] - _m_offset {
+							_m_limit = G_WEBPAGEFILES_WEBPAGECOUNT[_tmpi] - _m_offset
+						}
+						for _zzzz=0;_zzzz<_tmpi;_zzzz++ {
+							_m_offset += G_WEBPAGEFILES_WEBPAGECOUNT[_zzzz];
+						}
+					}
+				} else {
+					//
+				}
+
+				//forループの上限値
+				//配列のサイズを超えていないかチェックし適正に設定し直す
+				_for_endcount=_m_limit + _m_offset
+				if ARRAYSIZE(G_WEBPAGEMETA)<_for_endcount{
+					_for_endcount=ARRAYSIZE(G_WEBPAGEMETA)
+				}
+
+				for _j=_m_offset;_j<_for_endcount;_j++{
+
+					//_part_r = REPLACE(_part, '__INDEX__', TOSTR(_j))
+
+					_part2+=Tags_Interpret(/
+						_part,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_WEBPAGE,/
+						' index=' + C_DQ + _j + C_DQ + ' '/
+					)
+				}
+			}
+			//{entrynext}
+			//index-1のエントリを参照
+			elseif _myname == 'entrynext'{
+				//モディファイアから情報を取得
+				_m_scope=getModifierVal('scope','all','STR',_mymod)
+				_m_index=getModifierVal('index',-1,'INT',_parentmodifier,('',_contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY])
+				_m_index--
+				//配列のサイズを超えていないかチェック
+				//超えている場合は抜ける
+				_part=SPLIT(_part, C_TAG_START + 'else' + C_TAG_END, 2)
+				_else=_part[1]
+				_part=_part[0]
+
+				if _m_scope == 'tag' {
+					_tmp_mindex = _m_index
+					_m_tag = '';
+					_flag = 0
+					if RE_SEARCH(G_ENTRYMETA[_tmp_mindex+1],C_LF + 'TAG: (.*?)' + C_LF){
+						_m_tag = RE_GETSTR[1]
+						if _m_tag {
+							_m_tag = CUTSPACE(SPLIT(_m_tag, ',')[0]);
+							for _m = _tmp_mindex; 0 <= _m; _m -- {
+								if RE_SEARCH(G_ENTRYMETA[_m],C_LF + 'TAG: (.*?)' + C_LF){
+									_tag = RE_GETSTR[1]
+									_tag = ',' + _tag + ','
+									if ','+_m_tag+',' _in_ _tag{
+										_m_index = _m
+										_flag = 1
+										break
+									}
+								}
+							}
+						}
+					}
+					if ! _flag {
+						_m_index = -1
+					}
+				}
+
+				if _m_index < 0 {
+					_part2+=Tags_Interpret(/
+						_else,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_ENTRY,/
+						_contextmodifier/
+					)
+				} else {
+					_part2+=Tags_Interpret(/
+						_part,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_ENTRY,/
+						' index=' + C_DQ + _m_index + C_DQ + ' '/
+					)
+				}
+			}
+			//{entryprev}
+			elseif _myname == 'entryprev'{
+				//モディファイアから情報を取得
+				_m_scope=getModifierVal('scope','all','STR',_mymod)
+				_m_index=getModifierVal('index',-2,'INT',_parentmodifier,('',_contextmodifier)[_contexttype == C_CTXTTYPE_ENTRY])
+				_m_index++
+				//配列のサイズを超えていないかチェック
+				//超えている場合は抜ける
+				_part=SPLIT(_part, C_TAG_START + 'else' + C_TAG_END, 2)
+				_else=_part[1]
+				_part=_part[0]
+
+				if _m_scope == 'tag' {
+					_tmp_mindex = _m_index
+					_m_tag = '';
+					_flag = 0
+					if RE_SEARCH(G_ENTRYMETA[_tmp_mindex-1],C_LF + 'TAG: (.*?)' + C_LF){
+						_m_tag = RE_GETSTR[1]
+						if _m_tag {
+							_m_tag = CUTSPACE(SPLIT(_m_tag, ',')[0]);
+							for _m = _tmp_mindex; _m < ARRAYSIZE(G_ENTRYMETA); _m ++ {
+								if RE_SEARCH(G_ENTRYMETA[_m],C_LF + 'TAG: (.*?)' + C_LF){
+									_tag = RE_GETSTR[1]
+									_tag = ',' + _tag + ','
+									if ','+_m_tag+',' _in_ _tag{
+										_m_index = _m
+										_flag = 1
+										break
+									}
+								}
+							}
+						}
+					}
+					if ! _flag {
+						_m_index = -1
+					}
+				}
+
+				if _m_index<0 || ARRAYSIZE(G_ENTRYMETA)-1<_m_index {
+					_part2+=Tags_Interpret(/
+						_else,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_ENTRY,/
+						_contextmodifier/
+					)
+				}else{
+					_part2+=Tags_Interpret(/
+						_part,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_ENTRY,/
+						' index=' + C_DQ + _m_index + C_DQ + ' '/
+					)
+				}
+			}
+			//{pagenext}
+			//index-1のエントリを参照
+			elseif _myname == 'pagenext'{
+				//モディファイアから情報を取得
+				_m_scope=getModifierVal('scope','all','STR',_mymod)
+				_m_index=getModifierVal('index',-1,'INT',_parentmodifier,('',_contextmodifier)[_contexttype == C_CTXTTYPE_WEBPAGE])
+				_m_index--
+				//配列のサイズを超えていないかチェック
+				//超えている場合は抜ける
+				_part=SPLIT(_part, C_TAG_START + 'else' + C_TAG_END, 2)
+				_else=_part[1]
+				_part=_part[0]
+				_sum=0
+				if _m_scope == 'file'{
+					foreach G_WEBPAGEFILES_WEBPAGECOUNT;_c{
+						if _m_index == _sum-1{_sum=-1;break}
+						_sum+=_c
+					}
+				}
+				if _m_index<0 || _sum == -1{
+					_part2+=Tags_Interpret(/
+						_else,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_WEBPAGE,/
+						_contextmodifier/
+					)
+				}else{
+					_part2+=Tags_Interpret(/
+						_part,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_WEBPAGE,/
+					' index=' + C_DQ + _m_index + C_DQ + ' '/
+					)
+				}
+			}
+			//{pageprev}
+			elseif _myname == 'pageprev'{
+				//モディファイアから情報を取得
+				_m_scope=getModifierVal('scope','all','STR',_mymod)
+				_m_index=getModifierVal('index',-2,'INT',_parentmodifier,('',_contextmodifier)[_contexttype == C_CTXTTYPE_WEBPAGE])
+				_m_index++
+				//配列のサイズを超えていないかチェック
+				//超えている場合は抜ける
+				_part=SPLIT(_part, C_TAG_START + 'else' + C_TAG_END, 2)
+				_else=_part[1]
+				_part=_part[0]
+				_sum=0
+				if _m_scope == 'file'{
+					foreach G_WEBPAGEFILES_WEBPAGECOUNT;_c{
+						_sum+=_c
+						if _m_index == _sum{_sum=-1;break}
+					}
+				}
+//				if _m_index<0 || ARRAYSIZE(G_WEBPAGEMETA)-1<_m_index{
+				if _m_index<0 || ARRAYSIZE(G_WEBPAGEMETA)-1<_m_index || _sum == -1{
+
+					_part2+=Tags_Interpret(/
+						_else,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_WEBPAGE,/
+						_contextmodifier/
+					)
+				}else{
+					_part2+=Tags_Interpret(/
+						_part,/
+						_myname,/
+						_mymod,/
+						C_CTXTTYPE_WEBPAGE,/
+						' index=' + C_DQ + _m_index + C_DQ + ' '/
+					)
+				}
+			}
+			/////////////////////////////////////////////////////////////////
+			//{archives}
+			//アーカイブを出力する
+			elseif _myname == 'archives'{
+				//if _parenttagname == '' && _contexttype == C_CTXTTYPE_ARCHIVE{
+				//	_mymod+=' ' + _parentmodifier + ' '
+				//}
+				//モディファイアから情報を取得
+				_m_offset=getModifierVal('offset',0,'INT',_mymod)
+				_m_limit=getModifierVal('limit',C_ALMOST_INFINITE,'INT',_mymod)
+
+				_m_archive_type=getModifierVal('archive_type',"entryarchive",'STR',_mymod)
+				//forループの上限値
+				//配列のサイズを超えていないかチェックし適正に設定し直す
+				_for_endcount=_m_limit + _m_offset
+				_stylev=''
+				_tmp=0
+				foreach G_ARCHIVEMETA;_meta{
+					_meta = C_LF + _meta + C_LF
+					if _m_archive_type == 'entryarchive' {
+						_c = ARRAYSIZE(G_ENTRYFILES_NAME)
+						if _c < _for_endcount { _for_endcount = _c }
+						_tmp = 1
+						break
+					} elseif _m_archive_type == 'tagarchive' {
+						_c = ARRAYSIZE(G_TAGS)
+						if _c < _for_endcount { _for_endcount = _c }
+						_tmp = 1
+						break
+					}
+				}
+				//_m_archive_type に指定したアーカイブが実際にある場合のみループに入る
+				if _tmp {
+					for _j = _m_offset; _j < _for_endcount; _j++ {
+						_part2 += Tags_Interpret(/
+							_part,/
+							_myname,/
+							_mymod,/
+							C_CTXTTYPE_ARCHIVE,/
+							' archive_type=' + C_DQ + _stylev + C_DQ + /
+							' index=' + C_DQ + _j + C_DQ + ' '/
+						)
+					}
+				}
+			}
+
+			/////////////////////////////////////////////////////////////////	
+			//{loop}
+			//配列の変数を順番に取り出す（__value__が序数に置き換わる）
+			elseif _myname == 'loop'{
+				_name=getModifierVal('name','','STR',_mymod)
+				_glue=getModifierVal('glue','','STR',_mymod)
+				if _name{
+					_rev=getModifierVal('reverse',0,'INT',_mymod)
+					_limit=getModifierVal('limit',C_ALMOST_INFINITE,'INT',_mymod)
+
+					_arraysize=ARRAYSIZE(EVAL('USERVAR_' + _name))
+					if _rev == 1{
+						_loopend = 0
+						if _limit < 0 {
+							_loopend -= _limit
+							if _loopend>_arraysize {_loopend=_arraysize;}
+						} else {
+							_loopend = _arraysize - _limit
+							if _loopend<0 {_loopend=0}
+						}
+
+						for _q=_arraysize-1;_loopend<=_q;_q--{
+							_q2=_part
+							_q2=REPLACE(_q2,'__index__',TOSTR(_q))
+							_dores=Tags_Interpret(/
+								_q2,/
+								_myname,/
+								_mymod,/
+								_contexttype,/
+								_contextmodifier/
+							)
+							_part2+=_dores
+							if _loopend !=_q {
+								_part2+=_glue
+							}
+						}
+					}else{
+						_loopcount = _arraysize
+						if _limit < 0 {
+							_loopcount += _limit
+							if _loopcount<0 {_loopcount=0;}
+						} else {
+							_loopcount = _limit
+							if _arraysize<_loopcount {_loopcount=_arraysize}
+						}
+						
+						for _q=0;_q<_loopcount;_q++{
+							_q2=_part
+							_q2=REPLACE(_q2,'__index__',TOSTR(_q))
+							_dores=Tags_Interpret(/
+								_q2,/
+								_myname,/
+								_mymod,/
+								_contexttype,/
+								_contextmodifier/
+							)
+							_part2+=_dores
+							if _q < _loopcount-1 {
+								_part2+=_glue
+							}
+						}
+					}
+				}
+			}
+
+			/////////////////////////////////////////////////////////////////
+			//{setvarblock}
+			//変数に格納する
+			elseif _myname == 'setvarblock'{
+				_name=getModifierVal('name','','STR',_mymod)
+				if _name{
+					_dores=Tags_Interpret(/
+						_part,/
+						_myname,/
+						_mymod,/
+						_contexttype,/
+						_contextmodifier/
+					)
+					Tags_VarCollection_SetVar(_name,_dores)
+//						_part2+='SETVARBLOCKではいった'
+					_part2+=''
+				}
+			}
+			/////////////////////////////////////////////////////////////////
+			//{setvartemplate}
+			//変数にコードとして格納する
+			//※格納された時点では解釈されないのがsetvarblockと異なる
+			elseif _myname == 'setvartemplate'{
+				_name=getModifierVal('name','','STR',_mymod)
+				if _name{
+					//実行しない そのまま入れる
+					//getvarで呼び出された内容はその後実行される
+					_dores=_part
+					Tags_VarCollection_SetVar(_name,_dores)
+					_part2+=''
+				}
+			}
+			else{
+				//未実装のタグ
+				LOGGING2('メモ: ' + _myname + ' は未知のタグです')
+			}
+
+			//解釈した区間を削除し、そこに解釈した内容を挿入する
+			_code = ERASE(_code, _tagstartpos, _endpos + STRLEN(C_TAG_START + '/' + _myname + C_TAG_END) - _tagstartpos + 1)
+			_code = INSERT(_code, _tagstartpos, _part2)
+		}else{
+			//インラインタグである
+//			_mymod+=' ' + _parentmodifier + ' '
+			//タグを削除
+			_code = ERASE(_code, _tagstartpos, _tagstrlen)
+			//タグがあった場所に解釈結果を埋め込む
+			_calctagres = Tags_Interpret_Inlinetag(/
+				_myname,/
+				_mymod,/
+				_parenttagname,/
+				_parentmodifier,/
+				_contexttype,/
+				_contextmodifier/
+			) // (解釈した文字列, タグ記号がエスケープされているなら1)
+
+			if _calctagres[0] != -1{
+				_code = INSERT(_code, _tagstartpos, _calctagres[0])
+			}else{
+
+			}
+
+			//if _calctagres[1] { break }
+
+		}
+	}
+	_code
+}
+
+
+/*
+	[0] 解釈するタグ名
+	[1] 解釈するタグのモディファイア
+	[2] 親タグ名
+	[3] 親タグのモディファイア
+	[4] コンテキスト名
+	[5] コンテキストのモディファイア
+*/
+
+#define		C_ERROR_MSG_CONTEXT		'コンテキスト外です'
+#define		C_ERROR_MSG_INDEX		'必要なindex値が正しく指定されていません'
+e_outofcontext{
+	LOGGING2('<ERROR> ' + _argv[0] + ' ' + C_ERROR_MSG_CONTEXT)
+}
+e_outofindex{
+	LOGGING2('<ERROR> ' + _argv[0] + ' ' + C_ERROR_MSG_INDEX)
+}
+
+Tags_Interpret_Inlinetag {
+	_result = ''
+
+	_tag_expression_escaped = 0 //呼び出し元のループを止める
+
+	_myname = _argv[0]			//展開するタグ名
+	_mymod = _argv[1]			//展開するタグのモディファイア
+	_parentname = _argv[2]		//親タグ名
+	_parentmodifier = _argv[3]		//親タグのモディファイア
+	_contexttype = _argv[4]		//コンテキストの名前
+	_contextmodifier = _argv[5]			//コンテキストモディファイア
+
+	//モディファイア検索のために両端にスペースを付与
+	//過剰に付与されても特に問題はない
+	if !_mymod { _mymod = '' } else { _mymod = ' ' + _mymod + ' ' }
+	if !_parentmodifier { _parentmodifier = '' } else { _parentmodifier = ' ' + _parentmodifier + ' ' }
+	if !_contextmodifier { _contextmodifier = '' } else { _contextmodifier = ' ' + _contextmodifier + ' ' }
+
+	//内部で使用されるモディファイア
+	//各タグで汎用的に使われるのでここで読みだしておく
+	//逆にそのタグでしか使わないようなモディファイアは各if文内で読み出す
+/*
+	_m_index_entry = -1
+	_m_index_webpage = -1
+	_m_index_archive = -1
+*/
+	_m_index = -1
+	
+	_tmp_m_index_withc = getModifierVal('index', -1, 'INT', _parentmodifier, _contextmodifier)
+	//つかってないっぽいので削除
+	//_tmp_m_index = getModifierVal('index', -1, 'INT', _parentmodifier)
+/*
+	//ここで_parentnameをチェックしている意味がよくわからない
+	//_ctxnameだけでいい気もする
+//	if _parentname == 'archives' || _contexttype == C_CTXTTYPE_ARCHIVE{
+	if _contexttype == C_CTXTTYPE_ARCHIVE{
+		LETTONAME('_m_index_archive', _tmp_m_index_withc)
+//	}elseif _parentname == 'entries' || _contexttype == C_CTXTTYPE_ENTRY{
+	}elseif _contexttype == C_CTXTTYPE_ENTRY{
+		LETTONAME('_m_index_entry', _tmp_m_index_withc)
+	//}elseif _parentname == 'webpages' || _contexttype == C_CTXTTYPE_WEBPAGE{
+//	}elseif _parentname == 'pages' || _contexttype == C_CTXTTYPE_WEBPAGE{
+	}elseif _contexttype == C_CTXTTYPE_WEBPAGE{
+		LETTONAME('_m_index_webpage', _tmp_m_index_withc)
+	}
+*/
+
+//	if _contexttype == C_CTXTTYPE_ARCHIVE || _contexttype == C_CTXTTYPE_ENTRY || _contexttype == C_CTXTTYPE_WEBPAGE{
+//		//LETTONAME('_m_index', _tmp_m_index_withc)
+//		_m_index = _tmp_m_index_withc
+//	}else{
+//		LOGGING2(_argv);
+//		LOGGING2(_tmp_m_index_withc);
+//	}
+
+	_m_index = _tmp_m_index_withc
+
+	//{setvar}
+	if _myname == 'setvar'{
+		if (_m_name = getModifierVal('name', -1, 'STR', _mymod)) != -1{
+			if (_m_value = getModifierVal('value', -1, 'STR', _mymod)) != -1{
+				//key="value"のvalueにタグは含められないので
+				//展開処理は行わない
+				Tags_VarCollection_SetVar(_m_name, _m_value)
+			}else{
+				LOGGING2('エラー：setvar：valueが設定されていません(name: ' + _m_name + ')')
+			}
+		}else{
+			LOGGING2('エラー：setvar：nameが設定されていません')
+		}
+		_result=''
+	}
+	//{getvar}
+	elseif _myname == 'getvar'{
+		if (_m_name = getModifierVal('name', '', 'STR', _mymod)){
+			_result = Tags_VarCollection_GetVar(_m_name)
+		}else{
+			LOGGING2('エラー：getvar：nameが設定されていません')
+		}
+	}
+	//{blogname}
+	elseif _myname == 'blogname'{
+		_result = G_SITETITLE
+	}
+	//{blogdescription}
+	elseif _myname == 'blogdescription'{
+		_result = G_SITEDESCRIPTION
+	}
+	//{blogauthor}
+	elseif _myname == 'blogauthor'{
+		_result = G_SITEAUTHOR
+	}
+	//{blogurl}
+	elseif _myname == 'blogurl'{
+		_result = G_SITEURL
+	}
+	//{include}
+	elseif _myname == 'include'{
+		if (_modname = getModifierVal('module','','STR',_mymod)){
+			_modcode=''
+			for _i=0; _i < ARRAYSIZE(G_MODMETA); _i++{
+
+				_tmpmname = ''
+				if RE_SEARCH(G_MODMETA[_i], C_LF + 'TITLE: (.+)' + C_LF) {
+					_tmpmname = RE_GETSTR[1]
+				}
+				if _tmpmname == _modname{
+					_modcode = G_MODBODY[_i]
+					break
+				}
+			}
+			if _modcode == ''{
+				LOGGING2('エラー：include：moduleで指定されたモジュール ' + _modname + ' が見つからないか、モジュールのコードが空です')
+			}else{
+				_result = Tags_Interpret(_modcode, _parentname, _parentmodifier, _contexttype, _contextmodifier)
+			}
+		}else{
+			LOGGING2('エラー：include：moduleが設定されていません')
+		}
+	}
+	//if _myname == 'pageid'{
+	//	if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+	//	if _m_index < 0{e_outofindex(_myname);'';return}
+	//	//_tmp = G_WEBPAGEMETA[_m_index]
+	//	//if RE_SEARCH(_tmp, '^TITLE: (.*?)' + C_LF){
+	//	//	_result = RE_GETSTR[1]
+	//	//}else{
+	//	//	_result=''
+	//	//}
+	//	_result = _m_index
+	//}
+	if _myname == 'pagetitle'{
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_tmp = G_WEBPAGEMETA[_m_index]
+
+		if RE_SEARCH(_tmp, C_LF + 'TITLE: (.+)' + C_LF){
+			_result = RE_GETSTR[1]
+		}
+	}
+	//{entrytitle}
+	if _myname == 'entrytitle'{
+		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_tmp = G_ENTRYMETA[_m_index]
+
+		if RE_SEARCH(_tmp, C_LF + 'TITLE: (.+)' + C_LF){
+			_result = RE_GETSTR[1]
+		}
+	}
+
+	//{tagname}
+	if _myname == 'tagname'{
+		if _contexttype != C_CTXTTYPE_TAG{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_tmp = G_TAGS[_m_index]
+		_result = SPLIT(_tmp, ',')[0]
+	}
+
+	//{tagid}
+	if _myname == 'tagid'{
+		if _contexttype != C_CTXTTYPE_TAG{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_tmp = G_TAGS[_m_index]
+		_result = SPLIT(_tmp, ',')[1]
+	}
+
+	//{pagedate}
+	if _myname == 'pagedate'{
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_modformat = getModifierVal('format', '', 'STR', _mymod)
+		_tmp = G_WEBPAGEMETA[_m_index]
+
+		if RE_SEARCH(_tmp, C_LF + 'DATE: (.+)' + C_LF){
+			_result = RE_GETSTR[1]
+		}else{
+			//投稿日時が書かれていない場合は現在の日時
+			_t = GETTIME()
+			_result = _t[0] + '-' + _t[1] + '-' + _t[2] + ' ' + _t[4] + ':' + _t[5] + ':' + _t[6]
+		}
+
+		_result = GETTIMEINFORMAT(_result, _modformat)
+
+/*
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_tmp = G_WEBPAGEMETA[_m_index]
+		if RE_SEARCH(_tmp,'^DATE: (.*?)' + C_LF){
+			_result = RE_GETSTR[1]
+		}else{
+			_result=''
+		}
+*/
+	}
+	//{entrydate}
+	if _myname == 'entrydate'{
+		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_modformat = getModifierVal('format', '', 'STR', _mymod)
+		_tmp = G_ENTRYMETA[_m_index]
+
+		if RE_SEARCH(_tmp, C_LF + 'DATE: (.+)' + C_LF){
+			_result = RE_GETSTR[1]
+		}else{
+			//投稿日時が書かれていない場合は現在の日時
+			_t = GETTIME()
+			_result = _t[0] + '-' + _t[1] + '-' + _t[2] + ' ' + _t[4] + ':' + _t[5] + ':' + _t[6]
+		}
+
+		_result = GETTIMEINFORMAT(_result, _modformat)
+	}
+
+	//{pagebody}
+	if _myname == 'pagebody'{
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		//_result = G_WEBPAGEBODY[_m_index]
+		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+		_tmp = G_WEBPAGEBODY[_m_index]
+		if _mod_hlv {
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+		}
+
+		_result = TmplTag_Escape(_tmp)
+
+		_tag_expression_escaped = 1
+	}
+	//{pagemore}
+	if _myname == 'pagemore'{
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		//_result=G_WEBPAGEMORE[_m_index]
+		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+		_tmp = G_WEBPAGEMORE[_m_index]
+		if _mod_hlv {
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+		}
+
+		_result = TmplTag_Escape(_tmp)
+
+		_tag_expression_escaped = 1
+	}
+	//{pagefield}
+	if _myname == 'pagefield'{
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_modname = getModifierVal('name', '', 'STR', _mymod)
+		_tmp = G_WEBPAGEMETA[_m_index]
+		if RE_SEARCH(_tmp, C_LF + _modname + ': (.+)' + C_LF){
+			_result=RE_GETSTR[1]
+		}else{
+			_result=''
+		}
+	}
+
+	//{entryfield}
+	if _myname == 'entryfield'{
+		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_modname = getModifierVal('name', '', 'STR', _mymod)
+		_tmp = G_ENTRYMETA[_m_index]
+		if RE_SEARCH(_tmp, C_LF + _modname + ': (.+)' + C_LF){
+			_result = RE_GETSTR[1]
+		}else{
+			_result = ''
+		}
+	}
+	//{entrybody}
+	if _myname == 'entrybody'{
+		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		//_result = G_ENTRYBODY[_m_index]
+		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+		_tmp = G_ENTRYBODY[_m_index]
+		if _mod_hlv {
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+		}
+
+		_result = TmplTag_Escape(_tmp)
+
+		_tag_expression_escaped = 1
+	}
+	//{entrymore}
+	if _myname == 'entrymore'{
+		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		//_result = G_ENTRYMORE[_m_index]
+		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+		_tmp = G_ENTRYMORE[_m_index]
+		if _mod_hlv {
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+		}
+
+		_result = TmplTag_Escape(_tmp)
+
+		_tag_expression_escaped = 1
+	}
+	//{pagelink}
+	if _myname == 'pagelink'{
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_archive_path = ''
+		_fnam = ''
+
+		_pathofcaller = G_SYS_CURRENTBASICPATH
+		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]*?\\', '..\')
+		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]+?\\', '..\')
+		_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.\\]+?\\', '..\')
+		//最後の\より後ろを削除（\残す）
+		_pathofcaller_tmp = SPLIT(_pathofcaller, C_YEN)
+		_pathofcaller = ''
+		for _x=0; _x < ARRAYSIZE(_pathofcaller_tmp)-1; _x++{
+			_pathofcaller += _pathofcaller_tmp[_x] + C_YEN
+		}
+
+		//_tmp=G_WEBPAGEMETA[_m_index]
+		//if RE_SEARCH(_tmp,'^OUTPUTPATH: (.*?)' + C_LF){_fnam=RE_GETSTR[1]}else{_fnam=''}
+
+		foreach G_ARCHIVEMETA; _ameta{
+			_ameta = C_LF + _ameta
+			if RE_SEARCH(_ameta, C_LF + 'TYPE: webpage' + C_LF){
+				if RE_SEARCH(_ameta, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+					_archive_path = RE_GETSTR[1]
+					break
+				}else{
+					_archive_path = ''
+				}
+			}else{
+				_archive_path=''
+			}
+		}
+
+		_archive_path = TRANSLATEARCHIVEMAPPING( /
+			_archive_path, C_CTXTTYPE_WEBPAGE, _m_index /
+		)
+//		_result=_pathofcaller + _archive_path + _fnam + '.html'
+		_result = _pathofcaller + _archive_path
+		_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
+	}
+	//{entrylink}
+	if _myname == 'entrylink'{
+		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_archive_path=''
+		_fnam=''
+
+		_pathofcaller = G_SYS_CURRENTBASICPATH
+		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]*?\\', '..\')
+		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]+?\\', '..\')
+		_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.\\]+?\\', '..\')
+		//最後の\より後ろを削除（\残す）
+		_pathofcaller_tmp = SPLIT(_pathofcaller,C_YEN)
+		_pathofcaller = ''
+		for _x=0; _x < ARRAYSIZE(_pathofcaller_tmp) - 1; _x++{
+			_pathofcaller += _pathofcaller_tmp[_x] + C_YEN
+		}
+
+//		_tmp=G_ENTRYMETA[_m_index]
+//		if RE_SEARCH(_tmp,'^OUTPUTPATH: (.*?)' + C_LF){_fnam=RE_GETSTR[1]}else{_fnam=''}
+
+		foreach G_ARCHIVEMETA; _ameta{
+			_ameta = C_LF + _ameta
+			if RE_SEARCH(_ameta, C_LF + 'TYPE: entry' + C_LF){
+				if RE_SEARCH(_ameta, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+					_archive_path = RE_GETSTR[1]
+					break
+				}else{
+					_archive_path=''
+				}
+			}else{
+				_archive_path=''
+			}
+		}
+
+		_archive_path = TRANSLATEARCHIVEMAPPING( /
+			_archive_path, C_CTXTTYPE_ENTRY, _m_index /
+		)
+
+//		_result=_pathofcaller + _archive_path + _fnam + '.html'
+		_result = _pathofcaller + _archive_path
+		_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
+	}
+	//{entrybasename}
+	if _myname == 'entrybasename'{
+		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_tmp = C_LF + G_ENTRYMETA[_m_index] + C_LF
+		if RE_SEARCH(_tmp, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+			_tmp = RE_GETSTR[1]
+		}else{
+			_tmp=''
+		}
+		_result=_tmp
+	}
+	//{pagebasename}
+	if _myname == 'pagebasename'{
+		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_tmp = C_LF + G_WEBPAGEMETA[_m_index] + C_LF
+		if RE_SEARCH(_tmp, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+			_tmp = RE_GETSTR[1]
+		}else{
+			_tmp = ''
+		}
+		_result = _tmp
+	}
+	//{pagefiletitle}
+	if _myname == 'pagefiletitle'{
+		if _m_index < 0 { e_outofindex(_myname); ''; return }
+		_metadatas = IARRAY()
+		_filemetadatas = IARRAY()
+		if _contexttype == C_CTXTTYPE_WEBPAGE {
+			_metadatas = G_WEBPAGEMETA;
+			_filemetadatas = G_WEBPAGEFILES_META;
+		//} elseif _contexttype == C_CTXTTYPE_ENTRY {
+		//	_metadatas = G_ENTRYMETA;
+		//	_filemetadatas = G_ENTRYFILES_META;
+		} else {
+			e_outofcontext(_myname);'';return
+		}
+		_tmp = ''
+		if RE_SEARCH(C_LF + _metadatas[_m_index] + C_LF, C_LF + 'SYS_DATAFILEINDEX: (.*?)' + C_LF){
+			_tmpi=TOINT(RE_GETSTR[1])
+			_tmp2 = C_LF + _filemetadatas[_tmpi] + C_LF
+			if RE_SEARCH(_tmp2, C_LF + 'TITLE: (.*?)' + C_LF){
+				_tmp = RE_GETSTR[1]
+			}
+		}
+		_result = _tmp
+	}
+	//{archivetitle}
+	if _myname == 'archivetitle'{
+		if _contexttype != C_CTXTTYPE_ARCHIVE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_m_archive_type = getModifierVal('archive_type', '', 'STR', _parentmodifier, ('',_contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+		//if _m_archive_type == 'entryarchive' {
+		//	_tmp=G_ENTRYFILES_META[_m_index]
+		//	if _tmp && RE_SEARCH(C_LF + _tmp + C_LF, C_LF + 'TITLE: (.*?)' + C_LF){
+		//		_tmp = RE_GETSTR[1]
+		//	}else{
+		//		_tmp = ''
+		//	}
+		//	if _tmp{
+		//		_result = _tmp
+		//	}else{
+		//		_tmp = G_ENTRYFILES_NAME[_m_index]
+		//		_result = SPLITPATH(_tmp)[2]
+		//	}
+		//} elseif _m_archive_type == 'tagarchive' {
+		if _m_archive_type == 'tagarchive' {
+			_result = G_TAGS[_m_index]
+			_result = TRIM(_result[0, ','])
+		}else{
+			_result=''
+		}
+	}
+	//{taglink}
+	if _myname == 'taglink'{
+		if _contexttype != C_CTXTTYPE_TAG { e_outofcontext(_myname); ''; return}
+		if _m_index < 0 { e_outofindex(_myname); ''; return}
+
+		_m_archive_type = getModifierVal('archive_type', '', 'STR', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_TAG])
+		_archive_path = ''
+		_fnam = ''
+
+		_owner_path = G_SYS_CURRENTBASICPATH
+		//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
+		//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
+		_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
+		//最後の\より後ろを削除（\残す）
+		_owner_path_tmp = SPLIT(_owner_path, C_YEN)
+		_owner_path = ''
+		for _x=0; _x < ARRAYSIZE(_owner_path_tmp) - 1; _x++{
+			_owner_path += _owner_path_tmp[_x] + C_YEN
+		}
+		if !_owner_path{_owner_path = ''}
+
+		//_fnam = TRIM(G_TAGS[_m_index][1, ',']) + '.html'
+		_fnam = TRIM(G_TAGS[_m_index][1, ',']) + '\index.html'
+
+		foreach G_ARCHIVEMETA; _ameta{
+			_ameta = C_LF + _ameta + C_LF
+			if RE_SEARCH(_ameta, C_LF + 'TYPE: tagarchive' + C_LF){
+				if RE_SEARCH(_ameta, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+					_archive_path = RE_GETSTR[1]
+					break
+				}
+			}
+		}
+
+		_result = _owner_path + _archive_path + _fnam
+		_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
+	}
+	//{archivepagenum}
+	if _myname == 'archivepagetotal'{
+		if _contexttype != C_CTXTTYPE_ARCHIVE {e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_m_archive_page_total = getModifierVal('archive_page_total', '0', 'STR', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+		_result = _m_archive_page_total
+	}
+	//{archivepagenum}
+	if _myname == 'archivepagenum'{
+		if _contexttype != C_CTXTTYPE_ARCHIVE {e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_m_archive_page_num = getModifierVal('archive_page_num', '0', 'STR', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+		_result = _m_archive_page_num
+	}
+	//{archivelink}
+	if _myname == 'archivelink'{
+		if _contexttype != C_CTXTTYPE_ARCHIVE {e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_m_archive_type = getModifierVal('archive_type', '', 'STR', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+		if _m_archive_type{
+			_archive_path = ''
+			_fnam = ''
+
+			_owner_path = G_SYS_CURRENTBASICPATH
+			//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
+			//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
+			_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
+			//最後の\より後ろを削除（\残す）
+			_owner_path_tmp = SPLIT(_owner_path, C_YEN)
+			_owner_path = ''
+			for _x=0; _x < ARRAYSIZE(_owner_path_tmp) - 1; _x++{
+				_owner_path += _owner_path_tmp[_x] + C_YEN
+			}
+			if !_owner_path{_owner_path = ''}
+			if _m_archive_type == 'entryarchive' {
+				_tmp = ''
+				if RE_SEARCH(C_LF + G_ENTRYFILES_META[_m_index] + C_LF, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+					_tmp = RE_GETSTR[1]
+				}else{
+					_tmp = G_ENTRYFILES_NAME[_m_index]
+					_tmp = SPLITPATH(_tmp)[2]
+				}
+
+				if RE_SEARCH(C_LF + G_ENTRYFILES_META[_m_index] + C_LF, C_LF + 'FILENAME: (.*?)' + C_LF){
+					_tmp += '/' + RE_GETSTR[1]
+				}
+				//_fnam = _tmp + '.html'
+				_fnam = _tmp + '/index.html'
+			} elseif _m_archive_type == 'tagarchive' {
+				//_fnam = TRIM(G_TAGS[_m_index][1, ',']) + '.html'
+				_fnam = TRIM(G_TAGS[_m_index][1, ',']) + '\index.html'
+			}
+
+			if _m_archive_type == 'tagarchive'{
+				foreach G_ARCHIVEMETA; _ameta{
+					_ameta = C_LF + _ameta + C_LF
+					if RE_SEARCH(_ameta, C_LF + 'TYPE: tagarchive' + C_LF){
+						if RE_SEARCH(_ameta, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+							_archive_path = RE_GETSTR[1]
+							break
+						}
+					}
+				}
+			}else{
+				foreach G_ARCHIVEMETA; _ameta{
+					_ameta = C_LF + _ameta + C_LF
+					if RE_SEARCH(_ameta, C_LF + 'TYPE: entryarchive' + C_LF){
+						if RE_SEARCH(_ameta, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+							_archive_path = RE_GETSTR[1]
+							break
+						}else{
+							_archive_path = ''
+						}
+					}else{
+						_archive_path = ''
+					}
+				}
+			}
+
+			_result = _owner_path + _archive_path + _fnam
+			_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
+		}else{
+			//archive_typeが指定されていない場合は何も返さない
+			_result=''
+		}
+	}
+	//{archivepager}
+	if _myname == 'archivepager'{
+		//ひとまずarchivelinkのコードを流用
+		if _contexttype != C_CTXTTYPE_ARCHIVE {e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_m_archive_type = getModifierVal('archive_type', '', 'STR', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+		_m_archive_page_num = getModifierVal('archive_page_num', -1, 'INT', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+		if _m_archive_type {
+			_archive_path = ''
+			_fnam = IARRAY
+
+			_owner_path = G_SYS_CURRENTBASICPATH
+			//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
+			//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
+			_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
+			//最後の\より後ろを削除（\残す）
+			_owner_path_tmp = SPLIT(_owner_path, C_YEN)
+			_owner_path = ''
+			for _x=0; _x < ARRAYSIZE(_owner_path_tmp) - 1; _x++{
+				_owner_path += _owner_path_tmp[_x] + C_YEN
+			}
+			if !_owner_path{_owner_path = ''}
+			if _m_archive_type == 'entryarchive'{
+				_tmp = ''
+				if RE_SEARCH(C_LF + G_ENTRYFILES_META[_m_index] + C_LF, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+					_tmp = RE_GETSTR[1]
+				}else{
+					_tmp = G_ENTRYFILES_NAME[_m_index]
+					_tmp = SPLITPATH(_tmp)[2]
+				}
+
+				if RE_SEARCH ( /
+					C_LF + G_ENTRYFILES_META[_m_index] + C_LF, /
+					C_LF + 'FILENAME: (.*?)' + C_LF /
+				) {
+					_tmp += '/' + RE_GETSTR[1]
+				}
+				//_fnam = _tmp + '.html'
+				//_fnam = _tmp + '/index.html'+'|||||||||||'+G_ENTRYFILES_ENTRYCOUNT[_m_index]
+
+				_pcount = G_ENTRYFILES_ENTRYCOUNT[_m_index] / G_AUTOSPLIT_COUNT
+				if G_ENTRYFILES_ENTRYCOUNT[_m_index] % G_AUTOSPLIT_COUNT == 0 {
+					_pcount--
+				}
+				for _i = 0; _i <= _pcount ; _i ++ {
+					_s = _tmp + '/index' + ( _i + 1 ) + '.html'
+					if _i == 0 {
+						_s = _tmp + '/index.html'
+					}
+					_fnam ,= _s
+				}
+
+			} elseif _m_archive_type == 'tagarchive' {
+
+				_m_archive_page_total = getModifierVal('archive_page_total', 0, 'INT', _parentmodifier, ('', _contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+
+				for _tmp = 1; _tmp <= _m_archive_page_total; _tmp ++ {
+					_tmp2 = _tmp; if _tmp2 == 1 { _tmp2 = '' }
+					_fnam ,= TRIM(G_TAGS[_m_index][1, ',']) + '\index'+_tmp2+'.html'
+				}
+			}
+
+			if _m_archive_type == 'tagarchive'{
+				foreach G_ARCHIVEMETA; _ameta{
+					_ameta = C_LF + _ameta + C_LF
+					if RE_SEARCH(_ameta, C_LF + 'TYPE: tagarchive' + C_LF){
+						if RE_SEARCH(_ameta, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+							_archive_path = RE_GETSTR[1]
+							break
+						}
+					}
+				}
+			}else{
+				foreach G_ARCHIVEMETA; _ameta{
+					_ameta = C_LF + _ameta + C_LF
+					if RE_SEARCH(_ameta, C_LF + 'TYPE: entryarchive' + C_LF){
+						if RE_SEARCH(_ameta, C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+							_archive_path = RE_GETSTR[1]
+							break
+						}else{
+							_archive_path = ''
+						}
+					}else{
+						_archive_path = ''
+					}
+				}
+			}
+
+			_result = ''
+			for _i = 0; _i < ARRAYSIZE(_fnam); _i ++ {
+				_f = _fnam[_i]
+				_f = _owner_path + _archive_path + _f
+				_f = REPLACE(_f, C_YEN, '/')//hrefの値なので \ は / にする
+
+				_current_class = '';
+				if _i+1 == _m_archive_page_num {
+					_current_class = 'class="current"';
+				}
+
+				_result += '<li '+_current_class+'><a href="'+_f+'">'+(_i+1)+'</a></li>'
+			}
+			_result = '<ul>' + _result + '</ul>'
+		} else {
+			//archive_typeが指定されていない場合は何も返さない
+			_result=''
+		}
+	}
+	//動作検証不十分
+	//{root}
+	//大量に来ることが多いため、キャッシュ機構が必要
+	if _myname == 'root'{
+		_owner_path = G_SYS_CURRENTBASICPATH
+		//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
+		//LOGGING2(_owner_path)
+		//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
+		_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
+		//LOGGING2(_owner_path)
+
+		//最後の\より後ろを削除（\残す）
+		_owner_path_tmp = SPLIT(_owner_path, C_YEN)
+		_owner_path = ''
+		for _x=0; _x < ARRAYSIZE(_owner_path_tmp) - 1; _x++{
+			_owner_path += _owner_path_tmp[_x] + C_YEN
+		}
+		_result = _owner_path
+		_result = REPLACE(_result,C_YEN,'/')//hrefの値なので \ は / にする
+	}
+
+	_allkeyval = Tags_Mdf_EnumValueAndKey(_mymod)
+
+	foreach _allkeyval; _keyval{
+		_keyval = SPLIT(_keyval, C_LF, 2)
+		_key = _keyval[0]
+		_val = _keyval[1]
+
+		//グローバルモディファイアによるデータ操作
+		if key == 'trim'{
+			if _val == '1' {
+				//perlの正規表現とは異なるので注意
+				//http://boost.cppll.jp/HEAD/libs/regex/syntax.htm
+				_result = RE_REPLACE(_result, '\A\s+', '')
+				_result = RE_REPLACE(_result, '\s+\Z', '')
+			}
+		}
+		if _key == 'replace'{
+			_val = SPLIT(_val, C_LF)
+			_valfrom = _val[0]
+			_valto = _val[1]
+			if _valfrom != '' && _valfrom _in_ _result{
+				_result = REPLACE(_result, _valfrom, _valto)
+			}
+		}
+		if _key == 'remove_html'{
+			if _val == '1' {
+				_result = RE_REPLACE(_result, '<[^>]*?>', '')
+			}
+		}
+		if _key == 'strform'{
+			//出力結果がない場合は処理しない
+			//（出力結果があるときだけ特定のタグで囲んで……とかいう用途
+			//タグ出力結果が空でも特定のフォーマットにしたいのなら
+			//テンプレート上にそう書けばいいので）
+			if _result != '' {
+				_result = STRFORM(REPLACE(_val, '%', '$'), _result)
+			}
+		}
+	}
+
+/*
+	if RE_SEARCH(' ' + _mymod + ' ',' replace_from=' + C_DQ + '(.*?)' + C_DQ + ' '){
+		_valfrom=RE_GETSTR[1]
+		if RE_SEARCH(' ' + _mymod + ' ',' replace_to=' + C_DQ + '(.*?)' + C_DQ + ' '){
+			_valto=RE_GETSTR[1]
+			if _valfrom!='' {
+				_result=REPLACE(_result,_valfrom,_valto)
+			}
+		}
+	}
+*/
+
+	//後の処理上、文字列を返す必要がある
+	//文字列以外の場合は文字列の形式に変換して返す
+	//
+	//2020-10-01 pagebody等にループタグを書くと無限に再起するので判定用の値を返す　(文字列値,ループを止めるなら1、続行なら0)
+	_vtype = GETTYPE(_result)
+	if _vtype == 3{
+		//_result
+		( _result, _tag_expression_escaped )
+	}elseif _vtype != 0{
+		( TOSTR(_result), _tag_expression_escaped )
+	}else{
+		LOGGING2('エラー：タグ解釈に関する内部エラー')
+		(-1, 0);return
+	}
+}
+
+/*
+getIndexOfData{
+	_type1 = _argv[0]
+	_type2 = _argv[1]
+	_i = _argv[2]
+	if(_type1 == 'webpage'){
+		if(_type2 == 'meta'){
+			return G_WEBPAGEMETA[_i]
+		}elseif(_type2 == 'body'){
+			return G_WEBPAGEBODY[_i]
+		}
+	}
+	if(_type1 == 'entry'){
+		if(_type2 == 'meta'){
+			return G_ENTRYMETA[_i]
+		}elseif(_type2 == 'body'){
+			return G_ENTRYBODY[_i]
+		}
+	}
+}
+*/
+
+/*
+モディファイアから値を検索して返す
+0 値を取得するモディファイア名
+1 値がない場合に返す値（a2で指定する型には変換されない）
+2 値の型 'INT' 'REAL' 'STR' のいずれか その型で返す
+3～ 検索対象のモディファイア文字列 2つ以上も可能にしているが現在使っていない
+*/
+getModifierVal {
+	_key = _argv[0]
+	_value = _argv[1]
+	_valuetype = _argv[2]
+
+	for _i = 3; _i < _argc; _i++ {
+		_mod = ' ' + _argv[_i] + ' '
+		//文字列リテラルは必ず"で囲み 属性="値" と書くことにする
+		//属性='値' などは許容しない
+		//空白は許容される 属性 = "値"
+		if RE_SEARCH(_mod,'\s' + _key + '\s*?=\s*?"(.*?)"\s'){
+			_value=RE_GETSTR[1]
+
+			//リテラルに'と"は含まれないという前提
+//			_value=REMOVEQUOTES(_value)
+//			_value = _value // これなに？
+
+			
+			if STRSTR(_value, '$', 0) == 0 {
+				_value = Tags_VarCollection_GetVar(ERASE(_value, 0, 1))
+			}
+
+			if _valuetype == 'INT' && GETTYPE(_value) != 1{CVINT(_value)}
+			if _valuetype == 'REAL' && GETTYPE(_value) != 2{CVREAL(_value)}
+			if _valuetype == 'STR' && GETTYPE(_value) != 3{CVSTR(_value)}
+
+			break
+			//同じモディファイアが存在する可能性があるが、breakして探さない
+			//これが動作的に適切なのかはちょっとよくわからない
+		}
+	}
+	_value
+}
+
+
+
+/*
+モディファイアから全てのキーと値のペアを返す
+0以降 モディファイア文字列
+return キー（改行）値（改行）値.. 形式の汎用配列
+*/
+Tags_Mdf_EnumValueAndKey{
+	_resultarray=IARRAY()
+
+	for _i=0;_i<_argc;_i++{
+		if !_argv[_i]{continue}
+		_r=' ' + _argv[_i] + ' '
+
+		_brk=-1
+		while (_brk++)<100{
+			_e=''
+			if RE_SEARCH(_r,'^\s*?([^\s]+)\s*?=\s*?"(.*?)"\s*?') {
+				_re_str=RE_GETSTR()
+				_e+=_re_str[1] + C_LF + _re_str[2]
+				_r=ERASE(_r,RE_GETPOS[0],RE_GETLEN[0])
+				if RE_SEARCH(_r,'^\s*?,\s*?"(.*?)"\s*?'){
+					_re_str=RE_GETSTR()
+					_e+=C_LF + _re_str[1]
+					_r=ERASE(_r,RE_GETPOS[0],RE_GETLEN[0])
+				}
+			}else{
+				break
+			}
+			_resultarray,=_e
+		}
+	}
+	_resultarray
+}
+
+/*
+モディファイアから全てのキーと値のペアを返す
+0以降 モディファイア文字列
+return キー（改行）値（改行）値.. 形式の汎用配列
+*/
+//Tags_Mdf_EnumValueAndKey_OLD{
+//	_resultarray=IARRAY()
+//	for _i=0;_i<_argc;_i++{
+//		if !_argv[_i]{continue}
+//		_mod=' ' + _argv[_i] + ' '
+//		//文字列リテラルは必ず"で囲み 属性="値" と書くことにする
+//		_loop=-1
+//		while (_loop++)<100{
+////			if RE_SEARCH(_mod,'\s([^\s]+)\s*?=\s*?(".*?")\s'){
+//			if RE_SEARCH(_mod,'\s([^\s]+)\s*?=\s*?"(.*?)"\s'){
+//				_str=RE_GETSTR();_len=RE_GETLEN();_pos=RE_GETPOS();
+//				_key=CUTSPACE(_str[1])
+//				_val=CUTSPACE(_str[2])
+//				if '","' _in_ _val{
+//					_vals=SPLIT(_val,'","')
+//					_r=_key
+//					foreach _vals;_v{
+////						_r+=C_LF + REMOVEQUOTES(_v)
+//						_r+=C_LF + _v
+//					}
+//					_resultarray,=_r
+//				}else{
+////					_resultarray,=_key + C_LF + REMOVEQUOTES(_val)
+//					_resultarray,=_key + C_LF + _val
+//				}
+//				_mod=ERASE(_mod,_pos[0],_len[0]-1)
+//			}else{
+//				break
+//			}
+//		}
+//	}
+//	_resultarray
+//}
+
+
+
+
+//タグのsetvarではグローバル変数に内部的にプレフィックスを付けて保存しているが
+//これらは１ページ出力される毎に初期化しないといけない
+//その関数
+Tags_VarCollection_Init{
+	ERASEVARS(USERVARNAMELIST)//変数の実体を消す USERVARNAMELISTは単なる変数名のリストなので注意
+	USERVARNAMELIST=IARRAY()//変数名リストのクリア
+	//	1
+}
+Tags_VarCollection_Fin{
+	ERASEVARS(USERVARNAMELIST); ERASEVAR('USERVARNAMELIST')
+}
+
+//LETTONAME('変数[0]', '変数[0]の値') // できない
+//LETTONAME('変数', ('変数[0]の値')) // できる
+LETTONAMEARRAY {
+	_varname = _argv[0]
+	_value = _argv[1]
+	_targetindex = _argv[2]
+	_array = EVAL(_varname);
+	if (_targetindex == '') {
+		_array ,= _value
+	} else {
+		_array[_targetindex*1] = _value
+	}
+	LETTONAME(_varname, _array)
+}
+
+Tags_VarCollection_SetVar{
+	_wholename=_argv[0]
+	_varname = ''
+	if RE_SEARCH(_wholename, '(.+?)\[(\d*?)\]$') {
+		//序数の指定がある（配列）
+		_varname = RE_GETSTR[1]
+		_josuu = RE_GETSTR[2]
+
+		if ISVAR('USERVAR_' + _varname) != 1 {
+			_tmp = EVAL('USERVAR_' + _varname + ' = IARRAY()')
+		}
+		//if GETTYPE(EVAL('USERVAR_' + _varname)) != 4 && /
+		//! EVAL('USERVAR_' + _varname) {
+		//	//汎用配列でない場合は汎用配列として初期化する
+		//	_w = EVAL('USERVAR_' + _varname + ' = IARRAY()')
+		//}
+		if _josuu == ''{
+			LETTONAMEARRAY('USERVAR_' + _varname, _argv[1])
+		} else {
+			LETTONAMEARRAY('USERVAR_' + _varname, _argv[1], TOINT(_josuu))
+		}
+	}else{
+		// 序数ではない普通の変数
+		_varname = _wholename
+		LETTONAME('USERVAR_' + _wholename, _argv[1])
+	}
+
+	USERVARNAMELIST ,= 'USERVAR_' + _varname
+}
+
+Tags_VarCollection_GetVar{
+	if 1{
+		//変数[0]とかいう呼び出し方はAYAと共通なのでなにも加工しないで呼び出せる
+		EVAL('USERVAR_' + _argv[0])
+	}else{
+		''
+	}
+}
+
+
+//htmlのh2～h6タグを加工
+//本文の最大の見出しレベルは「##」からなので
+
+Tags_ReplaceHeadingTags {
+	_src = _argv[0]
+	_mod_hlv = _argv[1]
+	if _mod_hlv < 1 { _mod_hlv = 1 }
+	for _i = 2; _i <= 6; _i++  {
+		if _mod_hlv > 6 {_mod_hlv = 6} //h6までしかないので
+		//終了タグも置き換えないといけない
+		_src = REPLACE(_src, '<h'+_i, '<tmp_h'+_mod_hlv+' class="heading'+(_i-1)+'"')
+		_src = REPLACE(_src, '</h'+_i, '</tmp_h'+_mod_hlv)
+		_mod_hlv ++
+	}
+	for _i = 2; _i <= 6; _i++  {
+		_src = REPLACE(_src, '<tmp_h'+_i, '<h'+_i)
+		_src = REPLACE(_src, '</tmp_h'+_i, '</h'+_i)
+	}
+	_src
+}
+
+//GetMetaValueOfKey {
+//	if RE_SEARCH(_argv[0], C_LF + _argv[1] + ': (.+)' + C_LF){
+//		RE_GETSTR[1]
+//	}else{
+//		''
+//	}
+//	//_i = RE_SEARCH(_argv[0], C_LF + _argv[1] + ': (.+)' + C_LF)
+//	//RE_GETSTR[1]
+//}
+//
+//GetMetaValueOfKey_noreg {
+//	_p = STRSTR(_argv[0], C_LF + _argv[1] + ': ', 0)
+//	if _p < 0 { LOGGING2('ERROR1'); ''; return }
+//	_p2 = STRSTR(_argv[0], C_LF, _p + 1)
+//	//if _p2 < 0 { LOGGING2('ERROR2'); ''; return }
+//	_p1d = _p + STRLEN(C_LF + _argv[1] + ': ')
+//	_r = SUBSTR(_argv[0], _p1d, _p2 - _p1d)
+//	//LOGGING2(_p+" "+_p2+" "+_p1d+" "+_r)
+//	_r
+//}

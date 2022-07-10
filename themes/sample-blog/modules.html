@@ -1,0 +1,127 @@
+TITLE: ヘッダー
+----
+<!DOCTYPE html>
+<html>
+	<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+{if name="トピックパス" eq=""}
+	<title>{blogname} - {blogdescription}</title>
+{else}
+	<title>{loop name="トピックパス"}{getvar name="トピックパス[__index__]"} | {/loop}{blogname}</title>
+{/if}
+	<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&family=Quicksand&display=swap" rel="stylesheet">
+	<link rel="stylesheet" type="text/css" href="{root}resources/reset.css">
+	<link rel="stylesheet" type="text/css" href="{root}resources/styles.css">
+<!--
+メモ：テーマ開発中は、以下のようにしてテーマディレクトリのリソースを直接参照することで
+cssを変更するたびに sino.exe を実行せずに済みます
+-->
+<!-- <link rel="stylesheet" type="text/css" href="{root}../themes/sample-blog/resources/sample-blog.css"> -->
+</head>
+<body>
+	<div id="wrapper">
+
+		<header>
+			<div id="header" class="{if name="トップページ" eq="1"}toppage{else}subpage{/if}">
+				<div class="varea">
+					<h1>
+						<a href="{root}index.html">{blogname}</a>
+					</h1>
+					<h2>
+						{blogdescription}
+					</h2>
+				</div>
+			</div>
+		</header>
+
+		<hr>
+
+		<nav>
+			<div id="mainmenu">
+				<ul>
+					{pages}
+						<li><a href="{pagelink}">{pagetitle}</a></li>
+					{/pages}
+				</ul>
+			</div>
+		</nav>
+
+		<hr>
+
+		<main>
+			<div id="main">
+
+
+--------
+TITLE: フッター
+----
+
+			</div>
+		</main>
+
+		<hr>
+
+		<nav>
+			<div id="tagarchive_nav">
+				<ul>
+{archives archive_type="tagarchive"}
+					<li><a href="{archivelink}">{archivetitle}</a></li>
+{/archives}
+				</ul>
+			</div>
+		</nav>
+
+		<hr>
+
+		<footer>
+			<div id="footer">
+				<span class="copy">&copy; 2020 {blogauthor}</span><br>
+			</div>
+		</footer>
+	</div>
+</body>
+</html>
+
+
+--------
+TITLE: エントリ部分
+----
+
+<div class="article">
+	<article>
+		<div class="meta">
+			{if name="記事表示のタイプ" eq="個別"}
+			<h3 class="articleheading"><a href="{entrylink}"><!--{entrybasename}-->{entrytitle}</a></h3>
+			{else}
+			<h4 class="articleheading"><a href="{entrylink}"><!--{entrybasename}-->{entrytitle}</a></h4>
+			{/if}
+			<p class="date">last modified: {entrydate format="%Y/%m/%d"}</p>
+			<p class="tags">tag:{tags} <a href="{taglink}">{tagname}</a>{/tags}</p>
+		</div>
+		<div class="body">
+			{if name="記事表示のタイプ" eq="個別"}
+				{entrybody trim="1" headinglevel="4"}
+			{else}
+				{entrybody trim="1" headinglevel="5"}
+			{/if}
+		</div>
+	</article>
+</div>
+
+
+--------
+TITLE: ページコンテンツ部分
+----
+
+<div class="article">
+	<article>
+		<div class="meta">
+			<h2 class="articleheading"><a href="{pagelink}"><!--{pagebasename}-->{pagetitle}</a></h2>
+			<p class="date">last modifled: {pagedate format="%Y/%m/%d"}</p>
+		</div>
+		<div class="body">
+			{pagebody trim="1" headinglevel="3"}
+		</div>
+	</article>
+</div>

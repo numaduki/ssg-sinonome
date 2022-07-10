@@ -1,0 +1,432 @@
+//------------------------------------------------
+//ファイル書き込み動作
+//------------------------------------------------
+
+//-----------------------------------------------
+/*
+	アーカイブテンプレート：記事テンプレートの処理
+	0 _archivemapping
+	1 アーカイブ情報のインデックス
+	2 entry または webpage
+*/
+ArchiveTemplate_Output_Entry{
+	LOGGING2('記事アーカイブ（アーカイブマッピング ' + _argv[0] + '）を処理..')
+	ArchiveTemplate_Output_Entry_Webpage_Sub(_argv[0],_argv[1], C_CTXTTYPE_ENTRY)
+}
+
+ArchiveTemplate_Output_Webpage{
+	LOGGING2('ウェブページアーカイブ（アーカイブマッピング ' + _argv[0] + '）を処理..')
+	ArchiveTemplate_Output_Entry_Webpage_Sub(_argv[0],_argv[1], C_CTXTTYPE_WEBPAGE)
+}
+
+ArchiveTemplate_Output_GlobalReplace{
+	_code = _argv[0]
+	_sl = ARRAYSIZE(G_REPLACE)
+	_n = 0
+	_mode = ''
+	while _n < _sl {
+		if G_REPLACE[_n] == C_LF + 'REPLACE' {
+			_mode = 'REPLACE'; _n ++ 
+		} elseif G_REPLACE[_n] == C_LF + 'RE_REPLACE' {
+			_mode = 'RE_REPLACE'; _n ++ 
+		} elseif _mode == 'REPLACE' {
+			_code = REPLACE(_code, G_REPLACE[_n], G_REPLACE[_n+1])
+			_n += 2
+		} elseif _mode == 'RE_REPLACE' {
+			_code = RE_REPLACEEX(_code, G_REPLACE[_n], G_REPLACE[_n+1])
+			_n += 2
+		} else {
+			break
+		}
+	}
+	_code
+}
+
+ArchiveTemplate_Output_Entry_Webpage_Sub{
+	_archivemapping=_argv[0]
+	_i=_argv[1]
+	_type=_argv[2]
+
+	_G_TMP_DATAMETA=IARRAY()
+
+	if _type == C_CTXTTYPE_ENTRY {_G_TMP_DATAMETA=G_ENTRYMETA}
+	elseif _type == C_CTXTTYPE_WEBPAGE {_G_TMP_DATAMETA=G_WEBPAGEMETA}
+	else {return}
+
+	for _j=0;_j<ARRAYSIZE(_G_TMP_DATAMETA);_j++{
+		_fname=''
+
+		if STRSTR(C_LF + _G_TMP_DATAMETA[_j] + C_LF, C_LF + 'SKIPGENERATE' + C_LF, 0) >= 0 { continue; }
+
+		//		if RE_SEARCH(_G_TMP_DATAMETA[_j],C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+			//出力ファイル名取得 アーカイブの出力パスと結合して出力パス
+//			_fname=_archivemapping + RE_GETSTR[1] + '.html'
+//			_fname=REPLACE(_fname,'/',C_YEN)//ファイル出力先なので区切りは\
+		//		}
+			_fname=_archivemapping
+			_fname=REPLACE(_fname,'/',C_YEN)//ファイル出力先なので区切りは\
+
+		//アーカイブテンプレートのコードを解釈
+		//_fnameが空の場合は出力できないがその場合でも展開する
+
+//		G_SYS_CURRENTBASICPATH=_fname
+//		Tags_VarCollection_Init()
+//		_parsed_code=Tags_Interpret(/
+//			G_ARCHIVEBODY[_i],/
+//			'',/
+//			'',/
+//			_type/*C_CTXTTYPE_ENTRYまたはC_CTXTTYPE_WEBPAGE*/,/
+//			' index=' + C_DQ + _j + C_DQ + ' '/
+//			)
+//		G_SYS_CURRENTBASICPATH=''
+
+		if _fname{
+			_fname=TRANSLATEARCHIVEMAPPING(_fname, _type, _j)
+
+
+		G_SYS_CURRENTBASICPATH=_fname
+		Tags_VarCollection_Init()
+		_parsed_code = G_ARCHIVEBODY[_i]
+		_parsed_code = Tags_Interpret(/
+			_parsed_code,/
+			'',/
+			'',/
+			_type,/
+			//↑C_CTXTTYPE_ENTRYまたはC_CTXTTYPE_WEBPAGE
+			' index=' + C_DQ + _j + C_DQ + ' '/
+		)
+		G_SYS_CURRENTBASICPATH=''
+
+		_parsed_code = Tags_Escape_Fukugen(_parsed_code)
+
+
+			if G_REMOVEBLANKLINE{
+				_parsed_code = REMOVEBLANKLINE(_parsed_code);
+			}
+
+			//global REPLACE
+			_parsed_code = ArchiveTemplate_Output_GlobalReplace(_parsed_code)
+
+			_fname=G_OUTPUTDIR + _fname
+			_dooutput=1
+			if G_SKIPIFNOTCHANGE{
+				_l='';_origsrc=''
+				if FOPEN(_fname,'r'){
+					while 1{
+						_l=FREAD(_fname);
+						if _l == -1{FCLOSE(_fname);break}
+						_origsrc+=_l + C_LF
+					}
+				}
+				if _origsrc == _parsed_code{
+					_dooutput=0
+				}
+			}
+			if _dooutput{
+				//ファイル名があるので出力
+					WRITEFILE(_fname,_parsed_code)
+
+//				if FOPEN(_fname,'w'){
+//					FWRITE2(_fname,_parsed_code);
+//					FCLOSE(_fname);
+		//	}
+			}
+		}else{
+			//ファイル名ないので出力できない
+		}
+	}
+	1
+}
+
+ArchiveTemplate_Output_EntryArchive{
+	//記事ファイルごとに出力
+	LOGGING2('記事リストアーカイブ（アーカイブマッピング ' + _argv[0] + '）を処理..')
+
+	_i = _argv[1]
+
+	_entrycount_file = G_ENTRYFILES_ENTRYCOUNT[0]
+
+	//このファイル内でのオフセット値
+	_this_file_offset = 0
+
+	_entrycount_per_page = -1
+	_bute_page_count = _entrycount_file / G_AUTOSPLIT_COUNT
+	if _entrycount_file % G_AUTOSPLIT_COUNT != 0 { _bute_page_count += 1 }
+
+	for _pindex = 1; _pindex <= _bute_page_count; _pindex++ {
+
+		_entrycount_per_page = G_AUTOSPLIT_COUNT
+		if _pindex * G_AUTOSPLIT_COUNT > _entrycount_file {
+			_entrycount_per_page = _entrycount_file % G_AUTOSPLIT_COUNT
+		}
+
+		_fname = ''
+		if RE_SEARCH(C_LF + G_ARCHIVEMETA[_i] + C_LF,C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+			_fnroot=RE_GETSTR[1]
+			_pathpart=''
+			if RE_SEARCH(C_LF + G_ENTRYFILES_META[0] + C_LF,C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+				_pathpart=RE_GETSTR[1]
+			}else{
+				_pathpart=SPLITPATH(G_ENTRYFILES_NAME[0])
+				_pathpart=_pathpart[2]
+			}
+
+			if RE_SEARCH(C_LF + G_ENTRYFILES_META[0] + C_LF,C_LF + 'FILENAME: (.*?)' + C_LF){
+				_pathpart += '/' + RE_GETSTR[1]
+			}
+
+			_fname = _fnroot + _pathpart + C_YEN
+			if _pindex == 1 { _fname +=  'index.html' }
+			else { _fname +=  'index' + _pindex + '.html' }
+
+			_fname = REPLACE(_fname, '/', C_YEN) // 出力先なので / を \ に変換
+		}
+
+		if _fname{
+			//ファイル名があれば出力を続行
+			G_SYS_CURRENTBASICPATH = _fname
+			Tags_VarCollection_Init()
+
+			_parsed_code = Tags_Interpret(/
+				G_ARCHIVEBODY[_i],/
+				'',/
+				'',/
+				C_CTXTTYPE_ARCHIVE,/
+					//' offset=' + C_DQ + _offset + C_DQ + /
+					' offset=' + C_DQ + _this_file_offset + C_DQ + /
+					' limit=' + C_DQ + (_entrycount_per_page) + C_DQ + /
+					' archive_type=' + C_DQ + 'entryarchive' + C_DQ + /
+//					' index=' + C_DQ + _entrycountindex + C_DQ + ' '/
+					' index=' + C_DQ + 0 + C_DQ + /
+					' archive_page_num = ' + C_DQ + _pindex + C_DQ + /
+					' archive_page_total = ' + C_DQ + _bute_page_count + C_DQ + /
+					' '/
+			)//※indexはarchivetitleとか書いた時に必要
+			G_SYS_CURRENTBASICPATH = ''
+
+			_parsed_code = Tags_Escape_Fukugen(_parsed_code)
+
+			if G_REMOVEBLANKLINE{
+				_parsed_code = REMOVEBLANKLINE(_parsed_code);
+			}
+
+			//global REPLACE
+			_parsed_code = ArchiveTemplate_Output_GlobalReplace(_parsed_code)
+
+			_fname=G_OUTPUTDIR + _fname
+
+			_dooutput=1
+			if G_SKIPIFNOTCHANGE{
+				_l='';_origsrc=''
+				if FOPEN(_fname,'r'){
+					while 1{
+						_l=FREAD(_fname);
+						if _l == -1{FCLOSE(_fname);break}
+						_origsrc+=_l + C_LF
+					}
+				}
+				if _origsrc == _parsed_code{_dooutput=0}
+			}
+			if _dooutput{
+				WRITEFILE(_fname,_parsed_code)
+			}
+		}
+		//このファイル内でのオフセット値に加算
+		_this_file_offset += _entrycount_per_page
+	}
+
+	1
+}
+
+ArchiveTemplate_Output_TagArchive{
+	_archivemapping=_argv[0]
+	_i=_argv[1]
+	LOGGING2('タグ別記事アーカイブ（アーカイブマッピング ' + _archivemapping + '）を処理..')
+
+	_tag_name = '';
+	_tag_slug = '';
+	for _k = 0; _k < ARRAYSIZE(G_TAGS); _k++ {
+		_tag = G_TAGS[_k]
+		_tag = SPLIT(_tag, ',')
+		_tag_name = TRIM(_tag[0])
+		_tag_slug = TRIM(_tag[1])
+
+		_taged_entry_index = IARRAY;
+		_tag_name_2 = ',' + _tag_name + ','
+		for _m = 0; _m < ARRAYSIZE(G_ENTRYMETA); _m++{
+			if RE_SEARCH(G_ENTRYMETA[_m],C_LF + 'TAG: (.*?)' + C_LF){
+				_thistag = RE_GETSTR[1]
+				_thistag = ',' + _thistag + ','
+				if _tag_name_2 _in_ _thistag{
+					_taged_entry_index ,= _m
+				}
+			}
+		}
+
+		_entrycount_file = ARRAYSIZE(_taged_entry_index)
+		_bute_page_count = _entrycount_file / G_AUTOSPLIT_COUNT
+		if _entrycount_file % G_AUTOSPLIT_COUNT != 0 { _bute_page_count += 1 }
+
+		for _L = 1; _L <= _bute_page_count; _L ++ {
+
+			_n = _L; if _n == 1 { _n = '' }
+
+
+			_fname = _archivemapping + _tag_slug + '\index'+_n+'.html'
+			if _fname{
+
+				//G_SYS_CURRENTBASICPATH = _root2
+				G_SYS_CURRENTBASICPATH = _fname
+				Tags_VarCollection_Init()
+				_parsed_code = Tags_Interpret(/
+					G_ARCHIVEBODY[_i],/
+					'',/
+					'',/
+					C_CTXTTYPE_ARCHIVE,/
+					//' tag=' + C_DQ + _tag_name + C_DQ + /
+					' offset=' + C_DQ + _offset + C_DQ + /
+					' limit=' + C_DQ + (_entrycountinfile) + C_DQ + /
+					' archive_type=' + C_DQ + 'tagarchive' + C_DQ + /
+	//					' index=' + C_DQ + _entrycountindex + C_DQ + ' '/
+					' index=' + C_DQ + _k + C_DQ + ' ' + /
+
+					' x-entryindexes=' + C_DQ + TOSTR(_taged_entry_index[((_L-1)*G_AUTOSPLIT_COUNT, (_L-1)*G_AUTOSPLIT_COUNT+G_AUTOSPLIT_COUNT-1)]) + C_DQ + ' ' + /
+					' archive_page_num = ' + C_DQ + _L + C_DQ + /
+					' archive_page_total = ' + C_DQ + _bute_page_count + C_DQ + /
+					'' /
+
+				)//※indexはarchivetitleとか書いた時に必要
+
+				_parsed_code = Tags_Escape_Fukugen(_parsed_code)
+
+				G_SYS_CURRENTBASICPATH = ''
+
+				if G_REMOVEBLANKLINE{
+					_parsed_code = REMOVEBLANKLINE(_parsed_code);
+				}
+
+				//global REPLACE
+				_parsed_code = ArchiveTemplate_Output_GlobalReplace(_parsed_code)
+
+				_fname=G_OUTPUTDIR + _fname
+				_dooutput=1
+				if G_SKIPIFNOTCHANGE{
+					_l='';_origsrc=''
+					if FOPEN(_fname,'r'){
+						while 1{
+							_l=FREAD(_fname);
+							if _l == -1{FCLOSE(_fname);break}
+							_origsrc+=_l + C_LF
+						}
+					}
+					if _origsrc == _parsed_code{_dooutput=0}
+				}
+				if _dooutput{
+					WRITEFILE(_fname,_parsed_code)
+				}
+
+			}else{
+
+				//ファイル名ないので出力できない
+
+			}
+
+		}
+
+	}
+	1
+}
+
+/*
+	ディレクトリ（多階層）を作成
+	0 ディレクトリパスまたはファイルパス
+	1 _argv[0]がファイルパスの場合は1を指定
+*/
+
+MKDIR2{
+	_fname = _argv[0]
+	_dirs = SPLIT(_fname, C_YEN)
+	if _argv[1] == 1 {
+		_dirs[ARRAYSIZE(_dirs) - 1] = IARRAY() //ファイル部分を消す
+	}
+	_dirpath = ''
+	foreach _dirs; _d{
+		if _dirpath != ''{_dirpath = _dirpath + C_YEN}
+		_dirpath += _d
+		if (_fattrib = FATTRIB(_dirpath)) == -1 && _fattrib[2] != 1{
+			if MKDIR(_dirpath){
+				LOGGING2('新しいディレクトリ ' + _dirpath + ' を作成しました。')
+			}else{
+				LOGGING2('ディレクトリ ' + _dirpath + ' を作成できません。')
+				0; return
+			}
+		}
+	}
+	1
+}
+
+/*
+	ファイルを書き込む
+	0 ファイル名
+	1 書き込む文字列
+	2 ディレクトリを自動作成 == 1（デフォルト） しない == 0
+*/
+WRITEFILE{
+	//return
+
+	_fname = _argv[0]
+	_code = _argv[1]
+	_mkdirectory = _argv[2]
+
+	if _mkdirectory != 0{
+		if MKDIR2(_fname, 1) != 1{
+			return
+		}
+	}
+
+	if FOPEN(_fname,'w'){
+		FWRITE2(_fname,_code);
+		FCLOSE(_fname);
+	}else{
+		LOGGING2('ファイルをオープンできません。：' + _fname)
+	}
+}
+
+/*
+	ファイルをコピーする（ファイルパスでの指定可）
+	0 コピーするファイルのディレクトリ
+	1 コピーするファイル名
+	2 コピー先のディレクトリ
+*/
+COPYFILE{
+	_root = _argv[0]
+	_fname = _argv[1]
+	_targetdir = _argv[2]
+
+	if MKDIR2(_targetdir + _fname, 1) != 1{
+		return
+	}
+
+	_tmp =SPLITPATH(_fname)
+
+	_force_overwrite = 0
+	if _tmp[3] == ".css" {
+		_force_overwrite = 1
+	}
+
+	_fsize_from = FSIZE(_root+_fname)
+	_fsize_to = FSIZE(_targetdir+_fname)
+
+	if !_force_overwrite && _fsize_from == _fsize_to {
+		//LOGGING2('ファイルサイズが同じであるためコピーをスキップしました：' + _fname)
+		2
+	} else {
+		if FCOPY(_root+_fname, _targetdir+_tmp[0]+_tmp[1]){
+			//LOGGING2('ファイルをコピーしました。：' + _fname)
+			1
+		}else{
+			//LOGGING2('ファイルをコピーできません。：' + _fname)
+			0
+		}
+	}
+}

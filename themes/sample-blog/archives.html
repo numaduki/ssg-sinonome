@@ -1,0 +1,112 @@
+TITLE: 記事アーカイブ
+OUTPUTPATH: .\
+TYPE: entryarchive
+----
+
+{setvarblock name="ページ番号"}{archivepagenum}{/setvarblock}
+{if name="ページ番号" eq="1"}{setvar name="トップページ" value="1"}{/if}
+
+{include module="ヘッダー"}
+
+<h3 class="sectionheading">{archivepagenum} / {archivepagetotal}</h3>
+{entries}
+	{include module="エントリ部分"}
+{/entries}
+
+<div class="pager">
+{archivepager}
+</div>
+
+{include module="フッター"}
+
+
+--------
+TITLE: タグアーカイブ
+OUTPUTPATH: tags\
+TYPE: tagarchive
+----
+
+{setvarblock name="トピックパス[]"}{archivetitle}{/setvarblock}
+{setvarblock name="トピックパス[]"}タグアーカイブ{/setvarblock}
+
+{include module="ヘッダー"}
+
+<h3 class="sectionheading">アーカイブ - {archivetitle}</h3>
+{entries}
+	{include module="エントリ部分"}
+{/entries}
+
+<div class="pager">
+{archivepager}
+</div>
+
+{include module="フッター"}
+
+
+--------
+TITLE: 記事
+OUTPUTPATH: archives\<groupbasename>\<entrybasename><ext>
+TYPE: entry
+----
+{ignore}
+{setvarblock name="トピックパス[]"}{entrybasename}{/setvarblock}
+{/ignore}
+{setvarblock name="トピックパス[]"}{entrytitle}{/setvarblock}
+
+{setvar name="記事表示のタイプ" value="個別"}
+
+{include module="ヘッダー"}
+
+{include module="エントリ部分"}
+
+<div class="prevnext">
+	<ul>
+		<li>
+{entrynext scope="file"}
+			<span>prev</span>
+			<span><a href="{entrylink}">{entrytitle}</a></span>
+{else}
+			<!-- なし -->
+{/entrynext}
+		</li>
+		<li>
+{entryprev scope="file"}
+			<span>next</span>
+			<span><a href="{entrylink}">{entrytitle}</a></span>
+{else}
+			<!-- なし -->
+{/entryprev}
+		</li>
+	</ul>
+</div>
+
+{include module="フッター"}
+
+
+--------
+TITLE: ウェブページ
+OUTPUTPATH: <groupbasename>\<webpagebasename><ext>
+TYPE: webpage
+----
+
+{ignore}{setvarblock name="トピックパス[]"}{pagebasename}{/setvarblock}{/ignore}
+{setvarblock name="トピックパス[]"}{pagetitle}{/setvarblock}
+
+{include module="ヘッダー"}
+
+{include module="ページコンテンツ部分"}
+
+<div class="prevnext">
+	<ul>
+		<li>{pagenext scope="file"}
+			<span>prev</span>
+			<span><a href="{pagelink}">{pagetitle}</a></span>
+		{else}{/pagenext}</li>
+		<li>{pageprev scope="file"}
+			<span>next</span>
+			<span><a href="{pagelink}">{pagetitle}</a></span>
+		{else}{/pageprev}</li>
+	</ul>
+</div>
+
+{include module="フッター"}

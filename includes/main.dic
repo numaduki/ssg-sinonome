@@ -1,0 +1,460 @@
+//------------------------------------------------
+//メイン
+//------------------------------------------------
+
+//記号等
+#globaldefine	C_LF	CHR(10)
+#globaldefine	C_SQ	CHR(39)
+#globaldefine	C_DQ	CHR(34)
+#globaldefine	C_YEN	'\'
+
+#globaldefine	C_CTXTTYPE_ENTRY	'0'
+#globaldefine	C_CTXTTYPE_ARCHIVE	'1'
+#globaldefine	C_CTXTTYPE_WEBPAGE	'2'
+#globaldefine	C_CTXTTYPE_INDEX	'3'
+#globaldefine	C_CTXTTYPE_TAG		'4'
+
+// モディファイア limit 等で、何も指定しなかった（実質全て取り出す）場合の値
+#globaldefine	C_ALMOST_INFINITE	9999
+
+//設定ファイル
+//#define	C_CONFIGFILE	'profiles\default\sources\settings.txt'
+
+//-----------------------------------------------
+//public
+load{
+	//※処理時間計測でなく、各種処理時のユニークIDとして使っている
+	C_STARTTIME = GETTICKCOUNT()
+	G_LOG = ''
+	_t = GETTIME()
+	LOGGING2('sinonome preview version.' + C_LF)
+	LOGGING2('load on '+_t[0]+'-'+_t[1]+'-'+_t[2]+' '+_t[4]+':'+_t[5]+':'+_t[6] + C_LF)
+}
+
+unload{
+	_t = GETTIME()
+	LOGGING2(C_LF + 'unload on '+_t[0]+'-'+_t[1]+'-'+_t[2]+' '+_t[4]+':'+_t[5]+':'+_t[6])
+
+	WRITEFILE(G_PROFILEDIRPATH + C_YEN + 'log.txt', G_LOG)
+
+	ERASEVAR('G_LOG')
+	ERASEVAR('G_PROFILEDIRPATH')
+	ERASEVAR('C_STARTTIME')
+}
+
+request{
+	sinonome_request(_argv[0])
+}
+
+//sinonome独自のロギング
+LOGGING2 {
+	G_LOG += _argv[0] + C_LF
+}
+
+
+//配列の範囲チェックしてから配列から値を取り出す
+//a0 序数 a1- 配列
+//範囲外の場合は空文字列を返す
+INDEXOF {
+//5,(1,2,3,4,5)
+	if ARRAYSIZE(_argv) > _argv[0]+1 {
+		_argv[_argv[0]+1]
+	} else {
+		''
+	}
+}
+
+
+//-----------------------------------------------
+//a0 パラメータ(LF区切り)
+//失敗（そのまま何もせずにアンロードさせる）なら0、処理続行可能なら1
+
+
+sinonome_load{
+
+	//LOGGING2('-- sinonome START. --')
+	_param = _argv
+
+	G_PROFILEDIRPATH = "profiles" + C_YEN + "default"
+
+	_profiledir = ''
+
+	_i = ASEARCH('-profile', _param)
+	if _i >= 0 {
+		//パラメータで指定されている
+		_error = 0
+		_s = INDEXOF(_i+1, _param)
+		//LOGGING2(GETTYPE(_s))
+		_s = CUTSPACE(_s)
+		if ! _s {
+			_error = 1
+		} else {
+			_fattr = FATTRIB("profiles" + C_YEN +_s)
+			if _fattr == -1 || ! _fattr[2] {
+				_error = 1
+			} else {
+				_profiledir = _s
+			}
+		}
+		if _error {
+			LOGGING2('エラー：-profile パラメータの直後に指定された ' + _s + ' は有効なディレクトリではありません。')
+			0
+			return
+		}
+	} else {
+		//パラメータで指定されていないのでprofile.txtを読み込む
+		_fname = 'profile.txt'
+		if FOPEN(_fname, 'r'){
+			while 1{
+				_l = FREAD(_fname);
+				if _l == -1{FCLOSE(_fname); break}
+				_l = RE_REPLACE(_l,'\/\/.*$', '')
+				_l = CUTSPACE(_l)
+				if !_l { continue }
+				_fattr = FATTRIB("profiles" + C_YEN +_l)
+				if _fattr == -1 || ! _fattr[2] { continue}
+				_profiledir = _l
+				break
+			}
+		} else {
+			WRITEFILE('profile.txt', 'default')
+		}
+	}
+
+	if _profiledir {
+		LOGGING2('ロード処理..プロファイル ' + _profiledir + ' の処理を開始します。')
+		G_PROFILEDIRPATH = "profiles" + C_YEN +_profiledir
+	} else {
+		LOGGING2('ロード処理..profile.txt に有効な記述がないため、プロファイル default の処理を開始します。')
+	}
+
+
+	_config_file = G_PROFILEDIRPATH + C_YEN + 'settings.txt'
+
+	//設定ファイルの読み込みと変数再現
+	if FOPEN(_config_file, 'r'){
+		_loop = -1
+		while (_loop++) < 100{
+			_l = FREAD(_config_file)
+			if _l == -1{break}
+			if !_l || STRSTR(_l,'//',0) == 0{continue}
+			_s = SPLIT(_l,',',2)
+			_s[0] = CUTSPACE(_s[0])
+			_s[1] = CUTSPACE(_s[1])
+			_varname=''
+			if _s[0] == 'output_directory'{_varname = 'G_OUTPUTDIR'}
+			if _s[0] == 'output_skipifnotchange'{_varname = 'G_SKIPIFNOTCHANGE';_s[1]=TOINT(_s[1])}
+			if _s[0] == 'archive_autosplit_entrycount'{_varname = 'G_AUTOSPLIT_COUNT';_s[1]=TOINT(_s[1])}
+			if _s[0] == 'sitetitle'{_varname = 'G_SITETITLE'}
+			if _s[0] == 'sitedescription'{_varname = 'G_SITEDESCRIPTION'}
+			if _s[0] == 'siteauthor'{_varname = 'G_SITEAUTHOR'}
+			if _s[0] == 'public_html_url'{_varname = 'G_SITEURL'}
+			if _s[0] == 'remove_blankline'{_varname = 'G_REMOVEBLANKLINE'; _s[1] = TOINT(_s[1])}
+			if _s[0] == 'template_directory'{_varname = 'G_TEMPLATEDIR'}
+			if _varname{
+				LETTONAME(_varname,_s[1])
+				LOGGING2('変数設定: ' + _varname + ' = ' + _s[1])
+			}
+		}
+	}
+	if !ISVAR('G_OUTPUTDIR') || !ISVAR('G_SKIPIFNOTCHANGE') || !ISVAR('G_AUTOSPLIT_COUNT') || /
+	!ISVAR('G_SITETITLE') || !ISVAR('G_SITEDESCRIPTION') || !ISVAR('G_SITEAUTHOR') || /
+	!ISVAR('G_SITEURL') || !ISVAR('G_REMOVEBLANKLINE') || !ISVAR('G_TEMPLATEDIR' ){
+		LOGGING2('エラー：設定ファイルの記述が不足しています。'); 0; return
+	}else{
+
+		//G_OUTPUTDIRはプロファイルディレクトリの中に作成するので
+		G_OUTPUTDIR = G_PROFILEDIRPATH + C_YEN + G_OUTPUTDIR
+
+		LOGGING2('ロード処理..変数が再現されました。')
+	}
+
+	LOGGING2('ロード処理が完了しました。')
+
+	IV_LoadLib = IARRAY
+
+	//ロード成功
+	1
+
+}
+
+//-----------------------------------------------
+sinonome_request{
+
+
+	//_a = sinonome_load
+
+
+	//頭にtest の5バイトがある場合はテストモード その後ろをそのまま評価して返す
+	//各関数だけを直接実行できる
+	//それ以外は普通に動作させる
+	_t=GETTICKCOUNT()
+	//if _argv[0] && STRSTR(_argv[0],'test ',0) == 0{
+	//if STRSTR(_argv[0],'test ',0) == 0{
+	//	_argv[0]=ERASE(_argv[0],0,5)
+	//	EVAL(_argv[0])
+	//}else{
+	//		_a = SPLIT(_argv[0], CHR(13)+CHR(10));
+
+	//_argv[0]はCR+LFで区切られたパラメータ一覧
+	//ただし最初の行は必ず「sinonome」という8バイトが入っている
+	_param = SPLIT(_argv[0], CHR(13) + C_LF)
+
+	for _i=1; _i < ARRAYSIZE(_param); _i++ {
+		LOGGING2("起動パラメータ("+_i+"): "+_param[_i])
+	}
+
+	if sinonome_load(_param) {
+		sinonome_request_exec(_param)
+	} else {
+		LOGGING2('エラー：データの読み込み時に問題が発生しました。処理を中断します。')
+	}
+
+	LOGGING2(C_LF + 'all process time: ' + (GETTICKCOUNT()-_t) + 'msec' + C_LF)
+
+	sinonome_unload
+
+	//}
+
+	//_a = sinonome_unload
+
+}
+
+sinonome_request_exec{
+
+	_param = _argv
+
+	LOGGING2('処理を開始しています..')
+
+	_t = GETTICKCOUNT()
+	LOGGING2('DEFINE/REPLACE一覧を読み込んでいます..')
+	if ! DefineReplace_Load {
+		'TAG LIST HAS SOMETHING ERROR'
+		return
+	} else {
+		LOGGING2('DEFINE/REPLACE一覧を読み込みました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+	}
+
+	_t = GETTICKCOUNT()
+	LOGGING2('タグ一覧を読み込んでいます..')
+	if !Tags_Load{
+		'TAG LIST HAS SOMETHING ERROR'
+		return
+	}else{
+		LOGGING2('タグ一覧を読み込みました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+	}
+
+	_t = GETTICKCOUNT()
+	LOGGING2('エントリファイルを読み込んでいます..')
+	if !Entries_Load{
+		'ENTRIES HAS SOMETHING ERROR'
+		return
+	}else{
+		LOGGING2('エントリファイルを読み込みました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+	}
+
+	_t = GETTICKCOUNT()
+	LOGGING2('ウェブページファイルを読み込んでいます..')
+	if !Webpages_Load{
+		'WEBPAGES HAS SOMETHING ERROR'
+		return
+	}else{
+		LOGGING2('ウェブページファイルを読み込みました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+	}
+
+	_t = GETTICKCOUNT()
+	LOGGING2('テンプレートモジュールを読み込んでいます..')
+	if !Module_Load{
+		'MODULES HAS SOMETHING ERROR'
+		return
+	}else{
+		LOGGING2('テンプレートモジュールを読み込みました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+	}
+
+	//_t = GETTICKCOUNT()
+	LOGGING2('アーカイブテンプレートのコードを読み込んでいます..')
+	if !ArchiveTemplate_Load{
+		'ARCHIVE TEMPLATE LOADING HAS SOMETHING ERROR'
+		return
+	}else{
+		if ASEARCH('-nat', _param) >= 0 {
+			LOGGING2('-nat アーカイブテンプレートの処理をスキップしました')
+		} else {
+			LOGGING2('アーカイブテンプレートを処理しています..')
+			if !ArchiveTemplate_Output{
+				'ARCHIVES TEMPLATE OUTPUT HAS SOMETHING ERROR'
+				return
+			} else {
+				LOGGING2('アーカイブテンプレートを処理しました。')
+				//LOGGING2('アーカイブテンプレートを処理しました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+			}
+		}
+	}
+
+	_t = GETTICKCOUNT()
+	LOGGING2('インデックステンプレートのコードを読み込んでいます..')
+	if !IndexTemplate_Load{
+		'INDEX TEMPLATE LOADING HAS SOMETHING ERROR'
+		return
+	}else{
+		if ASEARCH('-nit', _param) >= 0 {
+			LOGGING2('-nit インデックステンプレートの処理をスキップしました')
+		} else {
+			LOGGING2('インデックステンプレートを処理しています..')
+			if !IndexTemplate_Output{
+				'INDEX TEMPLATE OUTPUT HAS SOMETHING ERROR'
+				return
+			} else {
+				LOGGING2('インデックステンプレートを処理しました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+			}
+		}
+	}
+
+	_t = GETTICKCOUNT()
+	if ASEARCH('-nfc', _param) >= 0 {
+		LOGGING2('-nfc テーマファイルのコピーをスキップしました')
+	} else {
+		LOGGING2('テーマファイルをコピーしています..')
+		if !Copy_ThemeFiles || !Copy_SourceMediaFiles{
+			'COPYING THEME FILES HAS SOMETHING ERROR'
+			return
+		}else{
+			LOGGING2('テーマファイルをコピーしました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+		}
+	}
+
+	1
+}
+
+//-----------------------------------------------
+sinonome_unload{
+
+	//ライブラリのアンロード
+	foreach IV_LoadLib; _lib {
+		UNLOADLIB(_lib)
+	}
+	ERASEVAR('IV_LoadLib')
+	ERASEVAR('saori_value')
+
+	//変数の削除
+	ERASEVARS(/
+		'G_ENTRYMETA','G_ENTRYBODY','G_ENTRYMORE',/
+		'G_ENTRYFILES_META','G_ENTRYFILES_NAME','G_ENTRYFILES_ENTRYCOUNT',/
+		'G_WEBPAGEMETA','G_WEBPAGEBODY','G_WEBPAGEMORE',/
+		'G_WEBPAGEFILES_META','G_WEBPAGEFILES_NAME','G_WEBPAGEFILES_WEBPAGECOUNT',/
+		'G_MODMETA','G_MODBODY',/
+		'G_ARCHIVEMETA','G_ARCHIVEBODY',/
+		'G_TMPLMETA','G_TMPLBODY',/
+
+		'G_TAGS',/
+
+		'G_DEFINE', 'G_REPLACE',/
+
+		//内部処理用var
+		'G_SYS_CURRENTBASICPATH',/
+
+		'G_OUTPUTDIR','G_SKIPIFNOTCHANGE','G_AUTOSPLIT_COUNT',/
+		'G_SITETITLE','G_SITEDESCRIPTION','G_SITEAUTHOR',/
+		'G_SITEURL','G_TEMPLATEDIR','G_REMOVEBLANKLINE'/
+	)
+
+	//setvar用変数
+	Tags_VarCollection_Fin()
+
+	LOGGING2('アンロード処理が完了しました。')
+
+	//LOGGING2('-- sinonome FINISHED. --')
+
+}
+
+
+// ## 外部DLL（SAORI/1.0）をロードしてリクエストを送信する
+// ## a0:DLLのパス（相対パスOK）・a1：送信する文字列
+// 使用したDLLはグローバル変数IV_LoadLibに記録され最終的にUNLOADLIBされる
+SAORI
+{
+	_crlf = CHR(13)+CHR(10)
+
+	// 一番最初にLoadした場合はGet Versionを送る
+	_loadrslt = LOADLIB(_argv[0])
+	if ! _loadrslt
+	{// ロード失敗
+		0
+		return
+	}
+	elseif _loadrslt == 1
+	{
+		// 初回のロード成功。GetVersionを送る。
+		// 200か204以外の場合はUnloadする
+		_saorires = REQUESTLIB(_argv[0],"GET Version SAORI/1.0%(_crlf)Sender: AYA%(_crlf)Charset: Shift_JIS%(_crlf)%(_crlf)")[0,_crlf]
+//		if _saorires == "SAORI/1.0 200 OK" || _saorires == "SAORI/1.0 204 No Content"
+		if STRSTR(_saorires,"OK",0)>=0 || STRSTR(_saorires,"No Content",0)>=0
+		{
+			// GET Version成功。続いてリクエスト文字列送信
+			IV_LoadLib ,= _argv[0]
+		}
+		else
+		{
+			// GET Version失敗。DLLをアンロードして0を返し、関数終了
+			UNLOADLIB(_argv[0])
+			0
+			return
+		}
+	}
+
+	// リクエスト文字列を作成
+	_request = "EXECUTE SAORI/1.0%(_crlf)Sender: AYA%(_crlf)SecurityLevel: Local%(_crlf)Charset: Shift_JIS%(_crlf)"
+	for _i=0;_i<_argc-1;_i++
+	{
+		_request += "Argument%(_i): %(_argv[_i+1])%(_crlf)"
+	}
+	_request += _crlf
+
+	// 実行
+	_result = REQUESTLIB(_argv[0],_request)
+
+	// この関数の戻り値はResultの値
+	// Value[n]はグローバル変数saori_valueに
+	SAORI.SetSaoriValue(_result)
+}
+SAORI.SetSaoriValue
+{
+	_crlf = CHR(13)+CHR(10)
+
+	_saori_r = ''
+	saori_value = IARRAY
+	_str = SPLIT(_argv[0],_crlf,0)
+
+	// Result
+	foreach _str;_eachstr
+	{
+		if STRSTR(_eachstr,'Result',0) == 0
+		{
+			_saori_r = ERASE(_eachstr,0,8)
+		}
+	}
+
+	// Value
+	foreach _str;_eachstr
+	{
+		if STRSTR(_eachstr,'Value',0) != 0
+		{
+			continue
+		}
+
+		_j = ERASE(_eachstr[0,': '],0,5) // 『Value』を消す。数字のみ残る
+
+		// Value値がひとつだけの場合は0はしばしば省略される（気がする）
+		// その場合_jは空文字列になる
+		if _j == ''
+		{
+			saori_value[0] = ERASE(_eachstr,0,STRLEN('Value: '))
+		}
+		else
+		{
+			CVINT(_j)
+			saori_value[_j] = ERASE(_eachstr,0,STRLEN("Value%(_j): "))
+		}
+	}
+	_saori_r
+}

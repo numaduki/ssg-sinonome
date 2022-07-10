@@ -1,0 +1,573 @@
+//------------------------------------------------
+//各種関数
+//------------------------------------------------
+
+/*共通関数*/
+/*
+	アーカイブマッピングの環境変数を解決する
+	0 パス
+	1 データの種類 entry webpage など
+	2 データのインデックス
+
+	%でなくて$なのはAYAが%を埋め込み変数として扱うため混同を避ける意図
+	→どうしても直感的でないのでやめた <key> と書くように変更
+*/
+TRANSLATEARCHIVEMAPPING{
+	_fname=_argv[0]
+	_type=_argv[1]
+	_index=_argv[2]
+
+	//<groupbasename> ファイルのメタ情報に設定したスラッグ
+	if '<groupbasename>' _in_ _fname{
+		_tmp=''
+		if _type == C_CTXTTYPE_ENTRY || _type == C_CTXTTYPE_WEBPAGE{
+
+			if _type == C_CTXTTYPE_ENTRY{_tmp=G_ENTRYMETA[_index]}
+			elseif _type == C_CTXTTYPE_WEBPAGE{_tmp=G_WEBPAGEMETA[_index]}
+
+			if RE_SEARCH(C_LF + _tmp + C_LF,C_LF + 'SYS_DATAFILEINDEX: (.*?)' + C_LF){
+				_tmpi=TOINT(RE_GETSTR[1])
+
+				if _type == C_CTXTTYPE_ENTRY{_tmp=G_ENTRYFILES_META[_tmpi]}
+				elseif _type == C_CTXTTYPE_WEBPAGE{_tmp=G_WEBPAGEFILES_META[_tmpi]}
+
+				if RE_SEARCH(C_LF + _tmp + C_LF,C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+					_tmp=RE_GETSTR[1]
+				}else{
+					//パース中に存在しない場合はファイル名を強制的に入れているので普通は通らない
+					if _type == C_CTXTTYPE_ENTRY{_tmp=G_ENTRYFILES_NAME[_tmpi]}
+					elseif _type == C_CTXTTYPE_WEBPAGE{_tmp=G_WEBPAGEFILES_NAME[_tmpi]}
+				}
+			}else{
+				_tmp=''
+			}
+		}
+		_fname=REPLACE(_fname,'<groupbasename>',_tmp)
+	}
+
+	//<entrybasename> <webpagebasename> 出力ベースネーム
+	if '<entrybasename>' _in_ _fname || '<webpagebasename>' _in_ _fname{
+		_tmp=''
+		if _type == C_CTXTTYPE_ENTRY || _type == C_CTXTTYPE_WEBPAGE{
+
+			if _type == C_CTXTTYPE_ENTRY{_tmp=G_ENTRYMETA[_index]}
+			elseif _type == C_CTXTTYPE_WEBPAGE{_tmp=G_WEBPAGEMETA[_index]}
+
+				if RE_SEARCH(C_LF + _tmp + C_LF,C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+					_tmp=RE_GETSTR[1]
+				}else{
+					_tmp=''
+				}
+		}
+		_fname=REPLACE(_fname,'<webpagebasename>',_tmp)
+		_fname=REPLACE(_fname,'<entrybasename>',_tmp)
+	}
+
+	//<entrydateyear> 出力ベースネーム
+	if '<entrydateyear>' _in_ _fname {
+		_tmp=''
+		if _type == C_CTXTTYPE_ENTRY {
+			if _type == C_CTXTTYPE_ENTRY{
+				_tmp=G_ENTRYMETA[_index]
+			}
+			if RE_SEARCH(C_LF + _tmp + C_LF,C_LF + 'DATE: (\d{4})\-\d{2}\-\d{2}' + C_LF){
+					_tmp = RE_GETSTR[1]
+				}else{
+					_tmp = ''
+				}
+		}
+		_fname=REPLACE(_fname,'<entrydateyear>',_tmp)
+	}
+	//<entrydatemonth> 出力ベースネーム
+	if '<entrydatemonth>' _in_ _fname {
+		_tmp=''
+		if _type == C_CTXTTYPE_ENTRY {
+			if _type == C_CTXTTYPE_ENTRY{
+				_tmp=G_ENTRYMETA[_index]
+			}
+			if RE_SEARCH(C_LF + _tmp + C_LF,C_LF + 'DATE: \d{4}\-(\d{2})\-\d{2}' + C_LF){
+					_tmp = RE_GETSTR[1]
+				}else{
+					_tmp = ''
+				}
+		}
+		_fname=REPLACE(_fname,'<entrydatemonth>',_tmp)
+	}
+
+	//<entrytag> 出力ベースネーム
+	if '<entrytag>' _in_ _fname {
+		_tmp=''
+		if _type == C_CTXTTYPE_ENTRY {
+			if _type == C_CTXTTYPE_ENTRY{
+				_tmp=G_ENTRYMETA[_index]
+			}
+			if RE_SEARCH(C_LF + _tmp + C_LF,C_LF + 'TAG: (.*?)' + C_LF){
+				_tmp = RE_GETSTR[1]
+				_tmp = SPLIT(_tmp, ',')
+				_tmp = _tmp[0]
+				foreach G_TAGS;_t {
+					if STRSTR(_t, _tmp, 0) == 0 {
+						_tmp = SPLIT(_t, ',')[1]
+						break
+					}
+				}
+			}else{
+				_tmp = ''
+			}
+		}
+		_fname=REPLACE(_fname,'<entrytag>',_tmp)
+	}
+
+	//<ext> 拡張子
+	if '<ext>' _in_ _fname{
+		_fname=REPLACE(_fname,'<ext>','.html')
+	}
+
+	_fname
+}
+
+
+/*
+REMOVEQUOTES{
+	_value=_argv[0]
+			_value=REPLACE(_value,CHR(34),'')
+			_value=REPLACE(_value,CHR(39),'')
+	_value
+}*/
+
+
+//汎用関数
+//FENUMではファイルが作成日時順に取得される
+//0 調べるディレクトリ
+FENUMALL2{
+	_lci = STRLEN(_argv[0]) - 1
+	if STRSTR(_argv[0], C_YEN, _lci) != _lci {
+		_argv[0] += C_YEN
+	}
+	_r = IARRAY()
+	_objs = FENUM(_argv[0], ':')
+	_objs = SPLIT(_objs, ':')
+	foreach _objs; _obj{
+		if STRSTR(_obj, C_YEN, 0) >= 0{
+			//汎用配列と単項値との演算は、全要素へ単項値が演算される
+			_dir = _argv[0] + ERASE(_obj, 0, 1) + C_YEN
+			_r ,= FENUMALL2(_dir)
+		}else{
+			_r ,= _argv[0] + _obj
+		}
+	}
+	_r
+}
+//ディレクトリを再現しないタイプ
+//あまり意味がないような気がする
+FENUMALL{
+	if STRSTR(_argv[0], C_YEN, STRLEN(_argv[0]) - 1) != 0 {
+		_argv[0] += C_YEN
+	}
+	_r = IARRAY()
+	_objs = FENUM(_argv[0], ':')
+	_objs = SPLIT(_objs, ':')
+	foreach _objs; _obj{
+		if STRSTR(_obj,C_YEN,0)>=0{
+			_r ,= FENUMALL(_argv[0] + ERASE(_obj, 0, 1) + C_YEN,':')
+		}else{
+			_r ,= _obj
+		}
+	}
+	_r
+}
+
+
+//変数名を汎用配列で一度に指定してERASEVAR
+ERASEVARS:void{
+	if _argc{
+		foreach _argv;_a{
+			if _a{
+				//ERASEVARしてISVARでも0になるのに呼び出すと値が入ったままになっているケースを
+				//どこかで見た気がするため、空文字列に初期化して削除
+				LETTONAME(_a, '')
+				ERASEVAR(_a)
+			}
+		}
+	}
+}
+
+//並び順を逆にした汎用配列を返す
+TURNARRAY {
+	_r = IARRAY()
+	foreach _argv;_a{
+		_r = (_a, _r)
+	}
+	_r
+}
+
+//汎用配列をアルファベット順・あいうえお順にならべる
+SORTARRAY {
+	_r = IARRAY
+	foreach _argv;_a{
+		_f = 0
+		for _i = 0; _i < ARRAYSIZE(_r); _i++ {
+			if _a < _r[_i] {
+				if _i < 1 { _r = (_a, _r) }
+				else { _r[_i-1] ,= _a }
+				_f = 1
+				break
+			}
+		}
+		if !_f { _r ,= _a }
+	}
+	_r
+}
+
+//コメントアウト文字列を削除して返す
+COMMENTOUT{
+	_argv[0]=RE_REPLACE(_argv[0],'\/\/.*?' + C_LF,'')
+	_argv[0]=RE_REPLACE(_argv[0],'\/\*.*?\*\/','')
+	_argv[0]
+}
+
+Tags_EscapeSomeChar_Escape {
+	_code = _argv[0]
+	_tmp_escchar = IARRAY
+
+	_chrs = SPLIT('* _ ' + C_YEN + ' ` # + - . ! { } [ ] ( ) 0 1 2 3 4 5 6 7 8 9', ' ')
+		//ulは普通1からなので0は必要ない気がする
+	_i = 0
+	foreach _chrs; _tag {
+		_loop = 0
+		while _loop++ < 100 {
+			if ( _pos = STRSTR(_code, C_YEN + _tag, 0) ) >= 0 {
+				_tmp_escchar ,= _tag //エスケープ対象の文字だけ
+				_code = ERASE(_code, _pos, 2)
+				_code = INSERT(_code, _pos, '||escape_char'+_i+'_'+C_STARTTIME+'||')
+			}else{
+				break
+			}
+		}
+		_i++
+	}
+	(_code, _tmp_escchar)
+}
+
+Tags_EscapeSomeMarkup_Escape {
+	_code = _argv[0]
+	_tmp_prearea = IARRAY
+
+	foreach ('pre', 'style', 'script'); _tag {
+		_loop = 0
+		while _loop++ < 100 {
+			if RE_SEARCH(_code,'<'+_tag+'[^>]*>.*?</'+_tag+'>'){
+				_tmp_prearea ,= RE_GETSTR[0]
+				_code = ERASE(_code, RE_GETPOS[0], RE_GETLEN[0])
+				_code = INSERT(_code, RE_GETPOS[0], '<__aReA_TmP_'+_tag+'__>')
+			}else{
+				break
+			}
+		}
+	}
+	(_code, _tmp_prearea)
+}
+
+/*
+Tags_EscapeSomeMarkup_Escape_OLD2 {
+	_code = _argv[0]
+	_tmp_prearea = IARRAY
+	_loop = 0
+	while _loop++ < 100 {
+		if RE_SEARCH(_code,'<[^_][^>]*>[^<]+</[^>]+>'){
+			_tmp_prearea ,= RE_GETSTR[0]
+			_code = ERASE(_code, RE_GETPOS[0], RE_GETLEN[0])
+			_code = INSERT(_code, RE_GETPOS[0], '<__aReA_TmP__>')
+		}else{
+			break
+		}
+	}
+	(_code, _tmp_prearea)
+}
+*/
+
+Tags_EscapeSomeChar_Restore {
+	_code = _argv[0]
+	_argv[0] = IARRAY
+	_tmp_escchar = _argv
+
+	_chrs = SPLIT('* _ ' + C_YEN + ' ` # + - . ! { } [ ] ( ) 0 1 2 3 4 5 6 7 8 9', ' ')
+	_i = 0
+	foreach _chrs; _tag {//順序的な理由
+		_loop = 0
+		while _loop++ < 100 {
+			_pos = STRSTR(_code, '||escape_char' + _i + '_' + C_STARTTIME + '||', 0)
+			if _pos < 0 {
+				break
+			} else {
+				_code = ERASE(_code, _pos, STRLEN('||escape_char' + _i + '_' + C_STARTTIME + '||'))
+				_code = INSERT(_code, _pos, _tmp_escchar[0])
+				_tmp_escchar[0] = IARRAY
+			}
+		}
+		_i++
+	}
+	_code
+}
+
+Tags_EscapeSomeMarkup_Restore {
+	_code = _argv[0]
+	_argv[0] = IARRAY
+	_tmp_prearea = _argv
+	foreach ('pre', 'style', 'script'); _tag {
+		_loop = 0
+		while _loop++ < 100 {
+			_i = STRSTR(_code, '<__aReA_TmP_'+_tag+'__>', 0)
+			if _i < 0 {
+				break
+			} else {
+				_code = ERASE(_code, _i, STRLEN('<__aReA_TmP_'+_tag+'__>'))
+				_code = INSERT(_code, _i, _tmp_prearea[0])
+				_tmp_prearea[0] = IARRAY
+			}
+		}
+	}
+	_code
+}
+
+//Markdown文法をマークアップに変換して返す
+SETHTMLFORMAT{
+	if _argv[0] == '' { _argv[0]; return }
+	// SAORIの仕様上改行は渡せないのでCHR(1)に変換
+	_argv[0] = REPLACE(_argv[0], CHR(13)+CHR(10), CHR(1))
+	_argv[0] = REPLACE(_argv[0], CHR(10), CHR(1))
+
+	// SAORIから改行を返すことは（一応）できるので改行に変換したまま返される
+	// よって受け取った後は何もする必要はない
+	SAORI("markdown.dll",_argv[0])
+
+}
+
+// 両端の半角スペース・タブ文字・改行・改ページ記号を削除
+// UTF-8では全角スペースも削除される？
+// ※AYAのCUTSPACE()は半角空白、全角空白、タブ
+TRIM {
+	_result = RE_REPLACE(_argv[0], '\A\s+', '')
+	RE_REPLACE(_result, '\s+\Z', '')
+}
+
+// <pre>タグを避けて重複する改行を削除する
+REMOVEBLANKLINE {
+	_code=_argv[0]
+	//preで囲まれている部分には手を付けない
+	_tmp_prearea=IARRAY()
+	_loop=-1
+	while (_loop++)<100{
+		if RE_SEARCH(_code, '<pre[\s\S]+<\/pre>'){
+			_tmp_prearea ,= RE_GETSTR[0]
+			_code = ERASE(_code, RE_GETPOS[0], RE_GETLEN[0])
+			_code = INSERT(_code, RE_GETPOS[0], '<__PrEaReA_TmP__>')
+		}else{
+			break
+		}
+	}
+
+	_code=RE_REPLACE(_code,C_LF + '\s+' + C_LF,C_LF)
+	_code=RE_REPLACE(_code,'^\n+','')
+	_code=RE_REPLACE(_code,'\n+$',C_LF)
+	_code=RE_REPLACE(_code,'\n+',C_LF)
+
+	_loop=-1
+	while (_loop++)<100{
+		if (_i=STRSTR(_code,'<__PrEaReA_TmP__>',0))<0{
+			break
+		}else{
+			_code=ERASE(_code,_i,STRLEN('<__PrEaReA_TmP__>'))
+			_code=INSERT(_code,_i,_tmp_prearea[0])
+			_tmp_prearea[0]=IARRAY()
+		}
+	}
+
+
+	_code
+}
+
+// ゼロパディング
+ZEROPAD {
+	_s=TOSTR(_argv[0])
+	_r=_s
+	_keta=_argv[1]
+	_padchar='0'
+	if _argv[2]{_padchar=_argv[2]}
+	for _i=STRLEN(_s);_i<_keta;_i++{
+		_r=_padchar + _r
+	}
+	_r
+}
+
+
+//YYYY-MM-DD HH:ii:SS で書かれた年月日時刻を与えたフォーマットで返す
+//YYYY-MM-DDがない場合→現在の年月日と時刻を使用
+//YYYY-MM-DDがあってHH:ii:SSがない場合→指定の年月日と00:00:00を使用
+GETTIMEINFORMAT {
+	_rawdata = _argv[0]
+	_format = _argv[1]
+	if !_format { _format = '%Y-%m-%d %H:%M:%S' }
+
+	//初期状態として現在の年月日と時刻を取得
+	_t = GETTIME()
+
+	// ※1 正規表現なしテスト済み 速度ほぼ変わらず
+	_no_time_data = 1
+	if RE_SEARCH(_rawdata, '(\d{1,4})\-(\d{1,2})\-(\d{1,2})') {
+		_r=RE_GETSTR()
+		if _r[1] && _r[2] && _r[3]{
+			_t[0] = TOINT(_r[1])
+			_t[1] = TOINT(_r[2])
+			_t[2] = TOINT(_r[3])
+
+			//ツェラーの公式で曜日を割り出す
+			_y = _t[0]; _m = _t[1]; _d = _t[2]
+			if _m <= 2 { _y --; _m += 12 }
+			_t[3] = ( _y + _y / 4 - _y / 100 + _y / 400 + (13 * _m + 8) / 5 + _d ) % 7
+
+			if RE_SEARCH(_rawdata, '(\d{1,2}):(\d{1,2}):(\d{1,2})') {
+				_r=RE_GETSTR()
+				if _r[1] && _r[2] && _r[3]{
+					_t[4] = TOINT(_r[1])
+					_t[5] = TOINT(_r[2])
+					_t[6] = TOINT(_r[3])
+					_no_time_data = 0
+				}
+			}
+		}
+	}
+
+	//YYYY-MM-DDはあるのにHH:ii:SSがなかった→00:00:00とみなす
+	if _no_time_data {
+		_t[4] = 0; _t[5] = 0; _t[6] = 0
+	}
+
+	_format2=_format
+	_s=''
+	//%Y 年を4桁
+	if '%Y' _in_ _format2{
+		_format2=REPLACE(_format2,'%Y',ZEROPAD(_t[0],4))
+	}
+	//%y 年を2桁 需要がよくわからないので未実装
+
+	//%b 月を省略形式で
+	if '%b' _in_ _format2{
+		_format2=REPLACE(_format2,'%b',('','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec')[_t[1]])
+	}
+	//%B 月を完全形式で
+	if '%B' _in_ _format2{
+		_format2=REPLACE(_format2,'%B',('','January','February','March','April','May','June','July','August','September','October','November','December')[_t[1]])
+	}
+	//%m 月を2桁
+	if '%m' _in_ _format2{
+		_format2=REPLACE(_format2,'%m',ZEROPAD(_t[1],2))
+	}
+	//%d 日を2桁
+	if '%d' _in_ _format2{
+		_format2=REPLACE(_format2,'%d',ZEROPAD(_t[2],2))
+	}
+	//%e 日を2桁 空白パディング
+	if '%e' _in_ _format2{
+		_format2=REPLACE(_format2,'%e',ZEROPAD(_t[2],2,' '))
+	}
+	//%j
+	//年初からの日を、3桁の数字で表示します。1桁、2桁の場合は、0が付加されます。(例: 078)
+	//未実装
+
+	//%H 時を24hの2桁 0パディング
+	if '%H' _in_ _format2{
+		_format2=REPLACE(_format2,'%H',ZEROPAD(_t[4],2))
+	}
+	//%k 時を24hの2桁 空白パディング
+	if '%k' _in_ _format2{
+		_format2=REPLACE(_format2,'%k',ZEROPAD(_t[4],2,' '))
+	}
+	//%I 時を12hの2桁 0パディング
+	if '%I' _in_ _format2{
+		_t2=_t[4];if _t2>12{_t2-=12}
+		_format2=REPLACE(_format2,'%I',ZEROPAD(_t2,2))
+	}
+	//%l 時を12hの2桁 空白パディング
+	if '%l' _in_ _format2{
+		_t2=_t[4];if _t2>12{_t2-=12}
+		_format2=REPLACE(_format2,'%l',ZEROPAD(_t2,2,' '))
+	}
+	//%M 分を2桁 0パディング
+	if '%M' _in_ _format2{
+		_format2=REPLACE(_format2,'%M',ZEROPAD(_t[5],2))
+	}
+	//%S 分を2桁 0パディング
+	if '%S' _in_ _format2{
+		_format2=REPLACE(_format2,'%S',ZEROPAD(_t[6],2))
+	}
+	//%p AM PM
+	if '%p' _in_ _format2{
+		_ampm='AM'
+		if _t[4]>=12{_ampm='PM'}
+		_format2=REPLACE(_format2,'%p',_ampm)
+	}
+	//%a 曜日 省略形式
+	if '%a' _in_ _format2{
+		_format2=REPLACE(_format2,'%a',('Sun','Mon','Tue','Wed','Thu','Fri','Sat')[_t[3]])
+	}
+	//%A 曜日 完全形式
+	if '%A' _in_ _format2{
+		_format2=REPLACE(_format2,'%A',('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday')[_t[3]])
+	}
+	//%w 曜日 完全形式
+	if '%w' _in_ _format2{
+		_format2=REPLACE(_format2,'%w',TOSTR(_t[3]))
+	}
+	//%x 言語に合わせて、日付を表示します。ほとんどの言語では、%B %d, %Yと同じです。(例: September 06, 2002、2002年09月06日)
+	if '%x' _in_ _format2{
+		_format2=REPLACE(_format2,'%x',GETTIMEINFORMAT(_rawdata,'%B %d, %Y'))
+	}
+	//%X 言語に合わせて、時刻を表示します。ほとんどの言語では、%I:%M %pと同じです。(例: 04:31 PM、16:31)
+	if '%X' _in_ _format2{
+		_format2=REPLACE(_format2,'%X',GETTIMEINFORMAT(_rawdata,'%I:%M %p'))
+	}
+	_format2
+}
+
+
+
+
+
+
+/*
+	//※1
+	//高密度に呼ばれるので正規表現使わずに書いてみたが変わらなかった
+	_no_time_data = 1
+
+	_y = SUBSTR(_rawdata, 0, 4)
+	_m = SUBSTR(_rawdata, 5, 2)
+	_d = SUBSTR(_rawdata, 8, 2)
+
+	if ISINTSTR(_y) && ISINTSTR(_m) && ISINTSTR(_d) {
+
+		CVINT(_y); CVINT(_m); CVINT(_d)
+
+		//ツェラーの公式で曜日を割り出す
+		if _m<=2{_y--;_m+=12}
+		_t[3]=(_y + _y / 4 - _y / 100 + _y / 400 + (13 * _m + 8) / 5 + _d) % 7
+
+		_t[0] = _y; _t[1] = _m; _t[2] = _d
+
+		if (':' _in_ _rawdata) {
+
+			_ho = SUBSTR(_rawdata, 11, 2)
+			_mi = SUBSTR(_rawdata, 14, 2)
+			_se = SUBSTR(_rawdata, 17, 2)
+
+			if ISINTSTR(_ho) && ISINTSTR(_mi) && ISINTSTR(_se) {
+				_t[4] = TOINT(_r[1])
+				_t[5] = TOINT(_r[2])
+				_t[6] = TOINT(_r[3])
+				_no_time_data = 0
+			}
+
+		}
+	}
+*/
+

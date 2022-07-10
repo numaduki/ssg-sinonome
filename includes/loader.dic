@@ -1,0 +1,834 @@
+//------------------------------------------------
+//リソース等読み込み動作
+//------------------------------------------------
+
+//テンプレートファイル
+#define		C_FILE_INDEXTEMPLATE		'themes' + C_YEN + G_TEMPLATEDIR + C_YEN + 'indexes.html'
+#define		C_FILE_ARCHIVETEMPLATE		'themes' + C_YEN + G_TEMPLATEDIR + C_YEN + 'archives.html'
+#define		C_FILE_TEMPLATEMODULE		'themes' + C_YEN + G_TEMPLATEDIR + C_YEN + 'modules.html'
+
+//投稿とページのソースファイル
+#define		C_DIR_ENTRY					G_PROFILEDIRPATH + C_YEN + 'entries' + C_YEN
+#define		C_DIR_WEBPAGE				G_PROFILEDIRPATH + C_YEN + 'webpages' + C_YEN
+#define		C_DIR_FILES					G_PROFILEDIRPATH + C_YEN + 'files' + C_YEN
+#define		C_FILE_TAGLIST				G_PROFILEDIRPATH + C_YEN + 'tags.txt'
+
+#define		C_FILE_DEFINELIST			G_PROFILEDIRPATH + C_YEN + 'define_replace.txt'
+
+/*
+ブログ記事ファイルとウェブページファイルの読み込み
+アーカイブテンプレートについては出力も行う
+*/
+
+DefineReplace_Load{
+	G_DEFINE = IARRAY()
+	G_REPLACE = IARRAY()
+	_fname = C_FILE_DEFINELIST
+	if FOPEN(_fname, 'r'){
+		_delim = ','
+		while 1{
+			_l = FREAD(_fname);
+			if _l == -1{FCLOSE(_fname); break}
+
+			if _l == '' { continue }
+
+			_tmp = SPLIT(_l, ': ', 2)
+
+			if _tmp[0] == 'DELIM' {
+				_delim = _tmp[1]
+			} else {
+				_tmp2 = SPLIT(_tmp[1], _delim)
+				if ARRAYSIZE(_tmp2) % 2 == 0 { // 要素数が2の倍数でなければ無効
+					if _tmp[0] == 'DEFINE' || _tmp[0] == 'RE_DEFINE' {
+						G_DEFINE ,= (C_LF + _tmp[0], _tmp2) // C_LF+'(RE_)DEFINE', 置換前1, 置換後1, ..
+					} elseif _tmp[0] == 'REPLACE' || _tmp[0] == 'RE_REPLACE' {
+						G_REPLACE ,= (C_LF + _tmp[0], _tmp2) // C_LF+'(RE_)REPLACE', 置換前1, 置換後1, ..
+					}
+				}
+			}
+		}
+	}
+	//LOGGING2(G_DEFINE)
+	//LOGGING2(G_REPLACE)
+	1
+}
+
+
+Tags_Load{
+	G_TAGS = IARRAY
+	_fname = C_FILE_TAGLIST
+	if FOPEN(_fname, 'r'){
+		while 1{
+			_l = FREAD(_fname);
+			if _l == -1{FCLOSE(_fname); break}
+			G_TAGS ,= _l
+		}
+	}
+	1
+}
+
+Entries_Load{
+	if Entries_Webpages_Load_Sub(C_DIR_ENTRY, 'entry'){
+		G_ENTRYFILES_NAME       = G_TMP_DATAFILES_NAME
+		G_ENTRYFILES_META       = G_TMP_DATAFILES_META
+		G_ENTRYFILES_ENTRYCOUNT = G_TMP_DATAFILES_DATACOUNT
+		G_ENTRYMETA             = G_TMP_DATAMETA
+		G_ENTRYBODY             = G_TMP_DATABODY
+		G_ENTRYMORE             = G_TMP_DATAMORE
+	}
+
+	ERASEVARS('G_TMP_DATAFILES_NAME', 'G_TMP_DATAFILES_META', 'G_TMP_DATAFILES_DATACOUNT', 'G_TMP_DATAMETA', 'G_TMP_DATABODY', 'G_TMP_DATAMORE')
+
+	1
+}
+
+Webpages_Load{
+	//ウェブページは見た目順なので配列の並びを逆にする
+	if Entries_Webpages_Load_Sub(C_DIR_WEBPAGE, 'webpage'){
+		G_WEBPAGEFILES_NAME         = G_TMP_DATAFILES_NAME
+		G_WEBPAGEFILES_META         = G_TMP_DATAFILES_META
+		G_WEBPAGEFILES_WEBPAGECOUNT = G_TMP_DATAFILES_DATACOUNT
+		G_WEBPAGEMETA               = G_TMP_DATAMETA
+		G_WEBPAGEBODY               = G_TMP_DATABODY
+		G_WEBPAGEMORE               = G_TMP_DATAMORE
+	}
+
+	ERASEVARS('G_TMP_DATAFILES_NAME', 'G_TMP_DATAFILES_META', 'G_TMP_DATAFILES_DATACOUNT', 'G_TMP_DATAMETA', 'G_TMP_DATABODY','G_TMP_DATAMORE')
+
+	1
+}
+
+Entries_Webpages_Load_Sub{
+	_directory=_argv[0]//ファイルを置いてあるディレクトリ名 \つき
+
+	//デフォルトの並び順が記事とウェブページとでは異なる
+	//
+	//記事ファイルはふつうファイル名は辞書順に大きくなっていき、(2020.html→2021.html→…)
+	//かつ記事は一番上に追加されていく
+	//よって記事はファイル名降順 z..a、かつファイルの先頭から並んでいる
+
+	//ウェブページは特殊な時系列はないので
+	//単純にファイル名順かつ上から並んでいる
+	//よってファイル名昇順 a..z かつファイルの先頭から順に取る
+
+	G_TMP_DATAFILES_NAME = SORTARRAY(FENUMALL(_directory))
+	if _argv[1] == 'entry' {
+		G_TMP_DATAFILES_NAME = TURNARRAY(G_TMP_DATAFILES_NAME)
+	}
+
+	//「-」を始まるファイルの場合はスキップ
+	for _i=ARRAYSIZE(G_TMP_DATAFILES_NAME)-1;0<=_i;_i--{
+//		if STRSTR(G_TMP_DATAFILES_NAME[_i],'.html',0)<0{
+		if STRSTR(G_TMP_DATAFILES_NAME[_i],'-',0) == 0{
+			G_TMP_DATAFILES_NAME[_i]=IARRAY()
+		}
+	}
+	G_TMP_DATAFILES_DATACOUNT=IARRAY()
+	G_TMP_DATAFILES_META=IARRAY()
+
+	G_TMP_DATAMETA=IARRAY()
+	G_TMP_DATABODY=IARRAY()
+	G_TMP_DATAMORE=IARRAY();
+
+
+	_sys_datafileindex=0
+	_tmp_dates = IARRAY()
+	_tosibango = 0
+
+	_globaltosibango = 0
+
+	_curtime = GETTIME()
+	_curtime_for_empty = _curtime[0] + '-' + ZEROPAD(_curtime[1], 2) + '-' + ZEROPAD(_curtime[2], 2) + ' ' + ZEROPAD(_curtime[4], 2) + ':' + ZEROPAD(_curtime[5], 2) + ':' + ZEROPAD(_curtime[6], 2)
+
+	//_iolog_set_on = ( GETSETTING('iolog') == 'on' )
+
+	foreach G_TMP_DATAFILES_NAME;_fname{
+		_fnameo = _fname
+		_fname = _directory + _fname
+		_file_text = ''
+		_r = 0
+		if FOPEN(_fname,'r'){
+			while 1{
+				_l = FREAD(_fname);
+				if _l == -1{FCLOSE(_fname);break}
+				_file_text += _l + C_LF
+			}
+
+			_file_meta = ''
+			_file_body = ''
+
+			// 以下、ファイルのヘッダ部分が必須
+			// ない場合は空のヘッダーを付与
+			if STRSTR(TRIM(_file_text), '<!--' + C_LF, 0) != 0 {
+				_file_text = '<!--' + C_LF + '-->' + C_LF + _file_text
+			}
+
+			_tmp =SPLIT(_file_text, '-->', 2)
+			_file_meta = _tmp[0]
+			_file_body = _tmp[1]
+			// ファイルのヘッダ
+			_tmp = SPLIT(_file_meta, '<!--', 2)
+			_file_meta = _tmp[1]
+			// ファイルの本体
+
+			_split_fnameo =  SPLIT(_fnameo, '.', 2)
+
+			//内部で使用するmeta情報を追加
+			//OUTPUTPATHを追加しているが、既に記載されている場合はそちらが優先される
+			//（最初に書かれている方が優先される）
+
+			//2020-10-01
+			//セパレータはカスタムできるように
+			//_C_SEP = '--------'
+			//_C_SECTIONSEP = '----'
+
+			// ==========================================================
+			// ファイルメタ情報を G_TMP_DATAFILES_META に格納
+			// ファイルメタ情報がない場合は自動生成
+			if _file_meta {
+				// ファイルのメタ情報がある
+				// セパレータのカスタム情報を取ってオーバーライド
+				//if RE_SEARCH(C_LF + _file_meta + C_LF, C_LF + 'SEP: (.*?)' + C_LF) { _C_SEP = RE_GETSTR[1] }
+				//if RE_SEARCH(C_LF + _file_meta + C_LF, C_LF + 'SECTIONSEP: (.*?)' + C_LF) { _C_SECTIONSEP = RE_GETSTR[1] }
+				//G_TMP_DATAFILES_META ,= _file_meta + C_LF + 'OUTPUTPATH: ' + SPLIT(_fnameo, '.', 2)[0] + C_LF
+				G_TMP_DATAFILES_META ,=/
+					_file_meta + C_LF +/
+					'OUTPUTPATH: ' + _split_fnameo[0] + C_LF +/
+					'SYS_DATAFILE_FILENAME: ' + _split_fnameo[0] + C_LF
+			} else {
+				G_TMP_DATAFILES_META ,=/
+					C_LF +/
+					'OUTPUTPATH: ' + _split_fnameo[0] + C_LF +/
+					'SYS_DATAFILE_FILENAME: ' + _split_fnameo[0] + C_LF
+			}
+
+			_append_each_entry_head = ''
+			if RE_SEARCH(C_LF + _file_meta + C_LF, C_LF + '(TAG: .*?)' + C_LF) {
+				_append_each_entry_head = C_LF + RE_GETSTR[1]
+			}
+
+
+
+
+			//ファイル別 DEFINE
+
+			// ファイルのDEFINEとREPLACEをチェックして作業用配列に格納
+			_file_define = IARRAY()
+			_file_replace = IARRAY()
+
+			_meta_lines = SPLIT(_file_meta, C_LF)
+			_delim = ','
+			foreach _meta_lines; _ml {
+				if _ml == '' { continue }
+				_tmp = SPLIT(_ml, ': ', 2)
+				if _tmp[0] == 'DELIM' && _tmp[1] != '' {
+					_delim = _tmp[1]
+				} elseif _tmp[1] != '' {
+					_tmp2 = SPLIT(_tmp[1], _delim)
+					if ARRAYSIZE(_tmp2) % 2 == 0 {
+						if _tmp[0] == 'DEFINE' || _tmp[0] == 'RE_DEFINE' {
+							_file_define ,= ( C_LF + _tmp[0], _tmp2 )
+						} elseif _tmp[0] == 'REPLACE' || _tmp[0] == 'RE_REPLACE' {
+							_file_replace ,= ( C_LF + _tmp[0], _tmp2 )
+						}
+					}
+				}
+			}
+
+
+			//パース前にDEFINE処理
+			//global DEFINE
+			_sl = ARRAYSIZE(G_DEFINE)
+			_n = 0
+			_mode = ''
+			while _n < _sl {
+				if G_DEFINE[_n] == C_LF + 'DEFINE' {
+					_mode = 'DEFINE'; _n ++ 
+				} elseif G_DEFINE[_n] == C_LF + 'RE_DEFINE' {
+					_mode = 'RE_DEFINE'; _n ++ 
+				} elseif _mode == 'DEFINE' {
+					_file_body = REPLACE(_file_body, G_DEFINE[_n], G_DEFINE[_n+1])
+					_n += 2
+				} elseif _mode == 'RE_DEFINE' {
+					_file_body = RE_REPLACEEX(_file_body, G_DEFINE[_n], G_DEFINE[_n+1])
+					_n += 2
+				} else {
+					break
+				}
+			}
+
+			//ファイルのDEFINE
+			_sl = ARRAYSIZE(_file_define)
+			_n = 0
+			_mode = ''
+			while _n < _sl {
+				if _file_define[_n] == C_LF + 'DEFINE' {
+					_mode = 'DEFINE'; _n ++ 
+				} elseif _file_define[_n] == C_LF + 'RE_DEFINE' {
+					_mode = 'RE_DEFINE'; _n ++ 
+				} elseif _mode == 'DEFINE' {
+					_file_body = REPLACE(_file_body, _file_define[_n], _file_define[_n+1])
+					_n += 2
+				} elseif _mode == 'RE_DEFINE' {
+					_file_body = RE_REPLACEEX(_file_body, _file_define[_n], _file_define[_n+1])
+					_n += 2
+				} else {
+					break
+				}
+			}
+
+
+			//_meta_value_delim = ','
+			//if RE_SEARCH(C_LF + _file_meta + C_LF, C_LF + 'DELIM: (.*?)' + C_LF) {
+			//	if RE_GETSTR[1] {
+			//		_meta_value_delim = RE_GETSTR[1]
+			//	}
+			//}
+			//_p = 0
+			//while 1 {
+			//	_i = STRSTR(C_LF + _file_meta + C_LF, C_LF + 'DEFINE: ', _p)
+			//	if ( _i < 0 ) { break }
+			//	_i += 9 // STRLEN(C_LF+'DEFINE: ')
+			//	_i2 = STRSTR(C_LF + _file_meta + C_LF, C_LF, _i)
+			//	_part = SUBSTR(C_LF + _file_meta + C_LF, _i, _i2 - _i + 1 - 1)
+			//	_p = _i2
+			//	_s = SPLIT(_part, _meta_value_delim)
+			//	_sl = ARRAYSIZE(_s)
+			//	for _n = 0; _n < _sl; _n += 2 {
+			//		_file_body = REPLACE(_file_body, _s[_n], _s[_n+1])
+			//	}
+			//}
+			//_p = 0
+			//while 1 {
+			//	_i = STRSTR(C_LF + _file_meta + C_LF, C_LF + 'RE_DEFINE: ', _p)
+			//	if ( _i < 0 ) { break }
+			//	_i += 12 // STRLEN(C_LF+'RE_DEFINE: ')
+			//	_i2 = STRSTR(C_LF + _file_meta + C_LF, C_LF, _i)
+			//	_part = SUBSTR(C_LF + _file_meta + C_LF, _i, _i2 - _i + 1 - 1)
+			//	_p = _i2
+			//	_s = SPLIT(_part, _meta_value_delim)
+			//	_sl = ARRAYSIZE(_s)
+			//	for _n = 0; _n < _sl; _n += 2 {
+			//		_file_body = RE_REPLACEEX(_file_body, _s[_n], _s[_n+1])
+			//	}
+			//}
+
+
+
+
+			//_entries = SPLIT(_file_body, C_LF + _C_SEP + C_LF)
+			_entries = SPLIT(_file_body, C_LF + '# ')
+			_cnt = 0
+
+			////空のエントリをチェックして削除
+			//for _i = ARRAYSIZE(_entries) - 1; _i >= 0; _i-- {
+			//	_e = _entries[_i]
+			//	if ! TRIM(_e) {
+			//		_entries[_i] = IARRAY()
+			//	}
+			//}
+
+			foreach _entries;_entry{
+				if ! TRIM(_entry) {
+					continue
+				} // SPLITできないので無効
+				//_split_entry = SPLIT(_entry, C_LF + _C_SECTIONSEP + C_LF, 3)
+
+				// タイトルの最初に (draft) と書くと下書き（出力しない）
+				if STRSTR(_entry, '(draft)', 0) == 0 { continue }
+
+				_entry_meta = ''
+				_entry_body = ''
+				_entry_more = ''
+
+				//前後に改行があり、半角スペースなども正確な場合のみ続きタグと見なす
+				_tmp = SPLIT(_entry,  C_LF + '<!-- more -->' + C_LF, 2);
+				if _tmp[1] { _entry_more = _tmp[1] }
+				_tmp = _tmp[0]
+
+				_tmp2 = SPLIT(_tmp, C_LF, 2)
+				//↓まさかと思ったがさすがに速くはならない
+				//_tmp2 = ( SUBSTR(_tmp, 0, (_pos = STRSTR(_tmp, C_LF, 0))), SUBSTR(_tmp, _pos + 1, 9999999999) )
+
+				//if ! _tmp2[1] { continue } // タイトルがなくても問題はない
+				_e_title = _tmp2[0]
+
+				_tmp3 = SPLIT(_tmp2[1], '-->' , 2)
+				//if ! _tmp3[1] { continue } // 本文がなくても問題はない
+				if ( ! _tmp3[1] ) {
+					//記事ヘッダがない
+					_entry_body = _tmp3[0]
+				} else {
+					//記事ヘッダがある？
+					_tmp4 = SPLIT(_tmp3[0], '<!--', 2)
+					if ( TRIM (_tmp4[0]) ) { continue } // タイトルと記事ヘッダの間に内容がある場合は無効
+					_entry_body = _tmp3[1]
+					_entry_meta = _tmp4[1]
+				}
+
+				_entry_meta = COMMENTOUT(_entry_meta)
+
+				if _e_title == '' { _e_title = 'タイトルなし' }
+
+				// 各種処理のため、内部的にMETA情報を追加する
+				// SYS_DATAFILEINDEX: その記事（ページ）が何番目のファイルに書かれているか
+				// OUTPUTPATHがない場合は適当に重ならない数値を付与する
+				// もちろん記事数が変われば変化するので何も気にしない人向け
+				_entry_meta = /
+					C_LF + _entry_meta + /
+					C_LF + 'SYS_DATAFILEINDEX: ' + _sys_datafileindex + /
+					C_LF + 'TITLE: ' + _e_title + /
+					//C_LF + 'OUTPUTPATH: ' + (ARRAYSIZE(_entries) - _cnt) + /
+					C_LF + 'OUTPUTPATH: ' + (_globaltosibango ++) + /
+					C_LF + 'DATE: ' + _curtime_for_empty + /
+					C_LF + _append_each_entry_head + /
+					C_LF
+
+				G_TMP_DATAMETA ,= _entry_meta
+
+				//if _iolog_set_on {
+				//	if ! SETSETTING('iolog', 'off') { return }
+				//}
+
+				_entry_body = SETHTMLFORMAT(_entry_body)
+				_entry_more = SETHTMLFORMAT(_entry_more)
+
+				//Markdown処理後にREPLACE処理
+
+				//global REPLACE
+				// → ファイル書き込み直前に移動
+				//_sl = ARRAYSIZE(G_REPLACE)
+				//_n = 0
+				//_mode = ''
+				//while _n < _sl {
+				//	if G_REPLACE[_n] == C_LF + 'REPLACE' {
+				//		_mode = 'REPLACE'; _n ++ 
+				//	} elseif G_REPLACE[_n] == C_LF + 'RE_REPLACE' {
+				//		_mode = 'RE_REPLACE'; _n ++ 
+				//	} elseif _mode == 'REPLACE' {
+				//		_entry_body = REPLACE(_entry_body, G_REPLACE[_n], G_REPLACE[_n+1])
+				//		_entry_more = REPLACE(_entry_more, G_REPLACE[_n], G_REPLACE[_n+1])
+				//		_n += 2
+				//	} elseif _mode == 'RE_REPLACE' {
+				//		_entry_body = RE_REPLACEEX(_entry_body, G_REPLACE[_n], G_REPLACE[_n+1])
+				//		_entry_more = RE_REPLACEEX(_entry_more, G_REPLACE[_n], G_REPLACE[_n+1])
+				//		_n += 2
+				//	} else {
+				//		break
+				//	}
+				//}
+
+				// ファイルのREPLACE
+				_sl = ARRAYSIZE(_file_replace)
+				_n = 0
+				_mode = ''
+				while _n < _sl {
+					if _file_replace[_n] == C_LF + 'REPLACE' {
+						_mode = 'REPLACE'; _n ++ 
+					} elseif _file_replace[_n] == C_LF + 'RE_REPLACE' {
+						_mode = 'RE_REPLACE'; _n ++ 
+					} elseif _mode == 'REPLACE' {
+						_entry_body = REPLACE(_entry_body, _file_replace[_n], _file_replace[_n+1])
+						_entry_more = REPLACE(_entry_more, _file_replace[_n], _file_replace[_n+1])
+						_n += 2
+					} elseif _mode == 'RE_REPLACE' {
+						_entry_body = RE_REPLACEEX(_entry_body, _file_replace[_n], _file_replace[_n+1])
+						_entry_more = RE_REPLACEEX(_entry_more, _file_replace[_n], _file_replace[_n+1])
+						_n += 2
+					} else {
+						break
+					}
+				}
+
+
+				//_p = 0
+				//while 1 {
+				//	_i = STRSTR(C_LF + _file_meta + C_LF, C_LF + 'REPLACE: ', _p)
+				//	if ( _i < 0 ) { break }
+				//	_i += 10 // STRLEN(C_LF+'REPLACE: ')
+				//	_i2 = STRSTR(C_LF + _file_meta + C_LF, C_LF, _i)
+				//	_part = SUBSTR(C_LF + _file_meta + C_LF, _i, _i2 - _i + 1 - 1)
+				//	_p = _i2
+				//	_s = SPLIT(_part, _meta_value_delim)
+				//	_sl = ARRAYSIZE(_s)
+				//	for _n = 0; _n < _sl; _n += 2 {
+				//		_entry_body = REPLACE(_entry_body, _s[_n], _s[_n+1])
+				//		_entry_more = REPLACE(_entry_more, _s[_n], _s[_n+1])
+				//	}
+				//}
+				//_p = 0
+				//while 1 {
+				//	_i = STRSTR(C_LF + _file_meta + C_LF, C_LF + 'RE_REPLACE: ', _p)
+				//	if ( _i < 0 ) { break }
+				//	_i += 13 // STRLEN(C_LF+'RE_REPLACE: ')
+				//	_i2 = STRSTR(C_LF + _file_meta + C_LF, C_LF, _i)
+				//	_part = SUBSTR(C_LF + _file_meta + C_LF, _i, _i2 - _i + 1 - 1)
+				//	_p = _i2
+				//	_s = SPLIT(_part, _meta_value_delim)
+				//	_sl = ARRAYSIZE(_s)
+				//	for _n = 0; _n < _sl; _n += 2 {
+				//		_entry_body = RE_REPLACEEX(_entry_body, _s[_n], _s[_n+1])
+				//		_entry_more = RE_REPLACEEX(_entry_more, _s[_n], _s[_n+1])
+				//	}
+				//}
+
+				G_TMP_DATABODY ,= _entry_body
+				G_TMP_DATAMORE ,= _entry_more
+
+
+				//G_TMP_DATABODY ,= _entry_body
+				//G_TMP_DATAMORE ,= _entry_more
+
+				//if _iolog_set_on {
+				//	if ! SETSETTING('iolog', 'on') { return }
+				//}
+
+				//if RE_SEARCH(_entry_meta, C_LF + 'DATE: (.*?)' + C_LF) {
+				//	_f = RE_GETSTR[1] + '|' + _tosibango
+				//	_tmp_dates ,= _f
+				//	_tosibango ++
+				//}
+				//→improvement
+				_pos = STRSTR(_entry_meta, C_LF + 'DATE: ', 0)
+				_pos += 7
+				_pos2 = STRSTR(_entry_meta, C_LF, _pos)
+				_f = SUBSTR(_entry_meta, _pos, _pos2 - _pos) + '|' + _tosibango
+				_tmp_dates ,= _f
+				_tosibango ++
+
+				_cnt++
+			}
+			G_TMP_DATAFILES_DATACOUNT ,= _cnt//ARRAYSIZE(_entries)
+			_r=1
+		}
+		if _r{
+			if _argv[1] != 'entry' {
+				_sys_datafileindex++
+			}
+		}else{
+			LOGGING2('ファイルを読み込めません：' + _fname)
+			continue
+		}
+	}
+
+	//if _iolog_set_on { _a = SETSETTING('iolog', 'on') }
+
+	if _argv[1] == 'entry' {
+		G_TMP_DATAFILES_NAME = IARRAY()
+		G_TMP_DATAFILES_NAME ,= "-sortedbydate.md"
+		G_TMP_DATAFILES_META = IARRAY()
+		G_TMP_DATAFILES_META ,= "OUTPUTPATH: ."
+		_sum = 0;
+		foreach G_TMP_DATAFILES_DATACOUNT;_i {
+			_sum += _i
+		}
+		G_TMP_DATAFILES_DATACOUNT = IARRAY()
+		G_TMP_DATAFILES_DATACOUNT ,= _sum
+
+		//G_TMP_DATAMETA G_TMP_DATABODY G_TMP_DATAMORE を日付順にソート
+		_tmp_dates_sorted = TURNARRAY(SORTARRAY(_tmp_dates))
+
+		G_TMP2_DATAMETA = IARRAY()
+		G_TMP2_DATABODY = IARRAY()
+		G_TMP2_DATAMORE = IARRAY()
+
+		foreach _tmp_dates_sorted; _z {
+			_z = SPLIT(_z, '|');
+			_z = TOINT(_z[1])
+			G_TMP2_DATAMETA ,= G_TMP_DATAMETA[_z]
+			G_TMP2_DATABODY ,= G_TMP_DATABODY[_z]
+			G_TMP2_DATAMORE ,= G_TMP_DATAMORE[_z]
+		}
+
+		G_TMP_DATAMETA = G_TMP2_DATAMETA
+		G_TMP_DATABODY = G_TMP2_DATABODY
+		G_TMP_DATAMORE = G_TMP2_DATAMORE
+	}
+
+	1
+}
+
+/*
+テンプレートモジュール読み込み
+*/
+
+Module_Load{
+	//モジュール読み込み
+	_code=''
+	_fname=C_FILE_TEMPLATEMODULE
+	if FOPEN(_fname,'r'){
+		while 1{
+			_l = FREAD(_fname);
+			if _l == -1{FCLOSE(_fname);break}
+			_l += C_LF
+			_code += _l
+		}
+	}
+	G_MODMETA = IARRAY()
+	G_MODBODY = IARRAY()
+
+	Module_Load_Records(_code)
+}
+
+Module_Load_Records{
+	_code=C_LF + _argv[0] + C_LF
+	_recs=RE_SPLIT(_code,C_LF + '--------.*?' + C_LF)
+	foreach _recs;_r{
+		_r=C_LF + _r + C_LF
+		_c=RE_SPLIT(_r, C_LF + '----.*?' + C_LF)
+
+		//メタデータ（出力パスやマッピングなど）
+		if !_c[0]{_c[0] = ''}
+		G_MODMETA ,= C_LF + COMMENTOUT(_c[0]) + C_LF
+
+		//本文
+		if !_c[1]{_c[1] = ''}
+		G_MODBODY ,= _c[1]
+	}
+	1
+}
+
+/*
+アーカイブテンプレート読み込み
+*/
+ArchiveTemplate_Load{
+	_tmplcode=''
+	_fname=C_FILE_ARCHIVETEMPLATE
+	if FOPEN(_fname,'r'){
+		while 1{
+			_l=FREAD(_fname);
+			if _l == -1{FCLOSE(_fname);break}
+			_l+=C_LF
+			_tmplcode+=_l
+		}
+	}
+	G_ARCHIVEMETA=IARRAY();
+	G_ARCHIVEBODY=IARRAY();
+	//G_ARCHIVEMETAとG_ARCHIVEMETAに代入
+
+	ArchiveTemplate_Load_Record(_tmplcode)
+}
+
+ArchiveTemplate_Output{
+
+	//各アーカイブテンプレートを解釈してファイル出力
+	for _i=0;_i<ARRAYSIZE(G_ARCHIVEMETA);_i++{
+		//タイプ・形式・出力パスを取得
+		_archivetype=''
+		//_archivingstyle=''
+		_archivemapping=''
+
+		if RE_SEARCH(G_ARCHIVEMETA[_i], C_LF + 'TYPE: (.*?)' + C_LF) {
+			_archivetype = TOUPPER(RE_GETSTR[1])
+		}
+		//if RE_SEARCH(G_ARCHIVEMETA[_i], C_LF + 'STYLE: (.*?)' + C_LF) {
+		//	_archivingstyle = TOUPPER(RE_GETSTR[1])
+		//}
+		if RE_SEARCH(G_ARCHIVEMETA[_i], C_LF + 'OUTPUTPATH: (.*?)' + C_LF) {
+			_archivemapping = RE_GETSTR[1]
+		}
+
+		_t = GETTICKCOUNT()
+		//typeによって何をどう出力するかは異なる
+		//したがって_archivetype で分岐して処理～出力まで行う
+		if _archivetype == 'ENTRY'{
+			//ブログ記事アーカイブ
+			if C_LF + '-ne' + C_LF _in_ _argv[0] {
+				LOGGING2('-ne ブログ記事アーカイブの処理をスキップしました。')
+			} else {
+				if !ArchiveTemplate_Output_Entry(_archivemapping, _i){
+					LOGGING2('ブログ記事アーカイブの処理中にエラーが発生しました。');0;return
+				} else {
+					LOGGING2('ブログ記事アーカイブを処理しました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+				}
+			}
+		}elseif _archivetype == 'ENTRYARCHIVE'{
+			if C_LF + '-nea' + C_LF _in_ _argv[0] {
+				LOGGING2('-nea ブログ記事リストの処理をスキップしました。')
+			} else {
+				if C_LF + '-neams' + C_LF _in_ _argv[0] {
+					LOGGING2('-neams ブログ記事リストの処理をスキップしました。')
+				} else {
+					if !ArchiveTemplate_Output_EntryArchive(_archivemapping, _i){
+						LOGGING2('ブログ記事リストの処理中にエラーが発生しました。');0;return
+					} else {
+						LOGGING2('ブログ記事リストを処理しました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+					}
+				}
+			}
+		}elseif _archivetype == 'WEBPAGE' {
+			if C_LF + '-nwa' + C_LF _in_ _argv[0] {
+				LOGGING2('-nwa ウェブページアーカイブの処理をスキップしました。')
+			} else {
+				if !ArchiveTemplate_Output_Webpage(_archivemapping, _i){
+					0;return
+				} else {
+					LOGGING2('ウェブページアーカイブを処理しました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+				}
+			}
+		}elseif _archivetype == 'TAGARCHIVE' {
+			if C_LF + '-nta' + C_LF _in_ _argv[0] {
+				LOGGING2('-nta タグ別生地アーカイブの処理をスキップしました。')
+			} else {
+				if !ArchiveTemplate_Output_TagArchive(_archivemapping, _i){
+					LOGGING2('タグ別記事アーカイブの処理中にエラーが発生しました。');0;return
+				} else {
+					LOGGING2('タグ別記事アーカイブを処理しました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+				}
+			}
+		}else{
+			LOGGING2('エラー：未知のアーカイブタイプです。:' + _archivetype)
+		}
+	}
+	1
+}
+
+ArchiveTemplate_Load_Record{
+	_code=C_LF + _argv[0] + C_LF
+	_recs=RE_SPLIT(_code,C_LF + '--------.*?' + C_LF)
+	foreach _recs;_r{
+		_r=C_LF + _r + C_LF
+		_c=RE_SPLIT(_r,C_LF + '----.*?' + C_LF)
+		if !_c[0]{_c[0]=''}//メタデータ（出力パスやマッピングなど）
+		//↑必要なときに正規表現で取得してしまうのでここではパースしない
+		if !_c[1]{_c[1]=''}//本文
+
+		G_ARCHIVEMETA,=C_LF + COMMENTOUT(_c[0]) + C_LF
+		G_ARCHIVEBODY,=_c[1]
+	}
+	1
+}
+
+/*
+インデックステンプレート読み込み
+*/
+
+IndexTemplate_Load{
+	_tmpltext=''
+	_fname=C_FILE_INDEXTEMPLATE
+	if FOPEN(_fname,'r'){
+		while 1{
+			_l=FREAD(_fname);
+			if _l == -1{FCLOSE(_fname);break}
+			_l+=C_LF
+			_tmpltext+=_l
+		}
+	}
+	G_TMPLMETA=IARRAY();
+	G_TMPLBODY=IARRAY();
+	_parsed_code=''
+
+	IndexTemplate_Load_Records(_tmpltext)
+}
+IndexTemplate_Output {
+	for _i=0;_i<ARRAYSIZE(G_TMPLMETA);_i++{
+		_fname=''
+	if RE_SEARCH(G_TMPLMETA[_i],C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+		_fname=RE_GETSTR[1]
+//			_fname=G_OUTPUTDIR + RE_GETSTR[1]
+	}else{
+		_fname=''
+	}
+//			_parsed_code=Tags_Interpret(G_TMPLBODY[_i],' basicpath=' + _fname + ' ',C_CTXTTYPE_INDEX,'')
+		Tags_VarCollection_Init()
+		G_SYS_CURRENTBASICPATH=_fname
+
+
+		_parsed_code = G_TMPLBODY[_i]
+		
+		_parsed_code=Tags_Interpret(/
+			_parsed_code,/
+			'',/
+			'',/
+			C_CTXTTYPE_INDEX,/
+			''/
+		)
+
+		G_SYS_CURRENTBASICPATH=''
+
+		_parsed_code = Tags_Escape_Fukugen(_parsed_code)
+
+			if G_REMOVEBLANKLINE{
+				_parsed_code = REMOVEBLANKLINE(_parsed_code);
+			}
+
+						_dooutput=1
+						if G_SKIPIFNOTCHANGE{
+							_l='';_origsrc=''
+							_fname=G_OUTPUTDIR + _fname
+							if FOPEN(_fname,'r'){
+								while 1{
+									_l=FREAD(_fname);
+									if _l == -1{FCLOSE(_fname);break}
+									_origsrc+=_l + C_LF
+								}
+							}
+							if _origsrc == _parsed_code{_dooutput=0}
+						}
+
+		if _dooutput{
+				WRITEFILE(_fname,_parsed_code)
+
+//				if FOPEN(_fname,'w'){
+//					FWRITE2(_fname,_parsed_code);
+//					FCLOSE(_fname);
+//				}
+		}
+	}
+	1
+}
+
+IndexTemplate_Load_Records{
+	_a=C_LF + _argv[0] + C_LF
+	_a=RE_SPLIT(_a,C_LF + '--------.*?' + C_LF)
+	foreach _a;_a2{
+		_a2=C_LF + _a2 + C_LF
+		_a2=RE_SPLIT(_a2,C_LF + '----.*?' + C_LF)
+		if !_a2[0]{_a2[0]=''}//メタデータ（出力パスやマッピングなど）
+		//↑必要なときに正規表現で取得してしまうのでここではパースしない
+		if !_a2[1]{_a2[1]=''}//本文
+
+		G_TMPLMETA,=C_LF + COMMENTOUT(_a2[0]) + C_LF
+		G_TMPLBODY,=_a2[1]
+	}
+
+	1
+}
+
+Copy_ThemeFiles{
+	_files = FENUMALL2('themes' + C_YEN + G_TEMPLATEDIR)
+
+	_targetdir = G_OUTPUTDIR
+
+	foreach _files; _f{
+
+		if ( /
+		(_f == C_FILE_INDEXTEMPLATE)	|| /
+		(_f == C_FILE_ARCHIVETEMPLATE)	|| /
+		(_f == C_FILE_TEMPLATEMODULE) /
+		){
+			continue
+		}
+
+		_f = SUBSTR(_f, STRLEN('themes' + C_YEN + G_TEMPLATEDIR + C_YEN), STRLEN(_f))
+		if !COPYFILE('themes' + C_YEN + G_TEMPLATEDIR + C_YEN, _f, _targetdir){
+			//0; return
+		}
+	}
+	1
+}
+
+Copy_SourceMediaFiles{
+	_files = FENUMALL2(C_DIR_FILES)
+
+	_targetdir = G_OUTPUTDIR + 'files' + C_YEN
+
+	foreach _files; _f{
+
+		_f = SUBSTR(_f, STRLEN(C_DIR_FILES), STRLEN(_f))
+		if !COPYFILE(C_DIR_FILES, _f, _targetdir){
+			//0; return
+		}
+	}
+	1
+}

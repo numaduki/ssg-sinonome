@@ -1,0 +1,9 @@
+科学,science
+宇宙,universe
+思想・宗教,thought-religion
+生活,life
+音楽,music
+文学,literature
+スポーツ,sport
+サブカルチャー,subculture
+食べ物,food
