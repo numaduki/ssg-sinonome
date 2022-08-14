@@ -131,6 +131,23 @@ sinonome_load{
 
 	_config_file = G_PROFILEDIRPATH + C_YEN + 'settings.txt'
 
+	//settings.txtが存在しなければsettings_default.txtからコピー
+	if ! FOPEN(_config_file, 'r') {
+		_config_default = G_PROFILEDIRPATH + C_YEN + 'settings_default.txt'
+		if FOPEN(_config_file, 'w') {
+			if FOPEN(_config_default, 'r') {
+				while 1 {
+					_l = FREAD(_config_default)
+					if _l == -1 { FCLOSE(_config_default); break }
+					FWRITE(_config_file, _l)
+				}
+			}
+			FCLOSE(_config_file)
+		}
+	} else {
+		FCLOSE(_config_file)
+	}
+
 	//設定ファイルの読み込みと変数再現
 	if FOPEN(_config_file, 'r'){
 		_loop = -1
