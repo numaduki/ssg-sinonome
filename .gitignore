@@ -13,4 +13,7 @@
 !/markdown.dll
 !/includes/**
 !/profiles/default/**
+/profiles/default/log.txt
+/profiles/default/settings.txt
+/profiles/default/SITEFILE/**
 !/themes/sample-blog/**
