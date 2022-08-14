@@ -1,24 +1,16 @@
 # 全て不許可
-
 *
 
 # ディレクトリ全て許可
-
 !*/
 
 # 指定したもののみ許可
-
 !/.gitignore
 !/README.md
-
 !/sino.exe
 !/sino.dll
 !/sino.txt
 !/markdown.dll
-
-!/includes/*
-
+!/includes/**
 !/profiles/default/**
-/profiles/default/SITEFILE/**
-
 !/themes/sample-blog/**
