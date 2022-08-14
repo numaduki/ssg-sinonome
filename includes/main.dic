@@ -136,7 +136,7 @@ sinonome_load{
 		_loop = -1
 		while (_loop++) < 100{
 			_l = FREAD(_config_file)
-			if _l == -1{break}
+			if _l == -1{FCLOSE(_config_file); break}
 			if !_l || STRSTR(_l,'//',0) == 0{continue}
 			_s = SPLIT(_l,',',2)
 			_s[0] = CUTSPACE(_s[0])
