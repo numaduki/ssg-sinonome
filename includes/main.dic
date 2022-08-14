@@ -131,30 +131,12 @@ sinonome_load{
 
 	_config_file = G_PROFILEDIRPATH + C_YEN + 'settings.txt'
 
-	//settings.txtが存在しなければsettings_default.txtからコピー
-	if ! FOPEN(_config_file, 'r') {
-		_config_default = G_PROFILEDIRPATH + C_YEN + 'settings_default.txt'
-		if FOPEN(_config_file, 'w') {
-			if FOPEN(_config_default, 'r') {
-				while 1 {
-					_l = FREAD(_config_default)
-					if _l == -1 { FCLOSE(_config_default); break }
-					FWRITE(_config_file, _l)
-				}
-			}
-			FCLOSE(_config_file)
-		}
-	} else {
-		FCLOSE(_config_file)
-	}
-
 	//設定ファイルの読み込みと変数再現
-	if FOPEN(_config_file, 'r'){
-		_loop = -1
-		while (_loop++) < 100{
+	if FOPENWITHDUP(_config_file, 'r', G_PROFILEDIRPATH + C_YEN + 'settings_default.txt'){
+		while 1 {
 			_l = FREAD(_config_file)
-			if _l == -1{FCLOSE(_config_file); break}
-			if !_l || STRSTR(_l,'//',0) == 0{continue}
+			if _l == -1 { FCLOSE(_config_file); break }
+			if ! _l || STRSTR(_l,'//',0) == 0 { continue }
 			_s = SPLIT(_l,',',2)
 			_s[0] = CUTSPACE(_s[0])
 			_s[1] = CUTSPACE(_s[1])
@@ -174,6 +156,7 @@ sinonome_load{
 			}
 		}
 	}
+
 	if !ISVAR('G_OUTPUTDIR') || !ISVAR('G_SKIPIFNOTCHANGE') || !ISVAR('G_AUTOSPLIT_COUNT') || /
 	!ISVAR('G_SITETITLE') || !ISVAR('G_SITEDESCRIPTION') || !ISVAR('G_SITEAUTHOR') || /
 	!ISVAR('G_SITEURL') || !ISVAR('G_REMOVEBLANKLINE') || !ISVAR('G_TEMPLATEDIR' ){

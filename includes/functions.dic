@@ -177,6 +177,33 @@ FENUMALL{
 	_r
 }
 
+//複製元が存在しない場合、ファイルを別名で複製する
+//a0 複製元ファイルパス a1 複製先ファイルパス
+//返り値 成功1 / 失敗0 / すでに存在2
+FOPENWITHDUP {
+	_f_open = _argv[0]
+	_f_dupsource = _argv[2]
+
+	// ファイルが存在しない場合は複製する
+	if FATTRIB(_f_open) == -1 {
+		// 複製先を書き込みモードで開く（新規作成）
+		if FOPEN(_f_open, 'w') {
+			// 複製元を開く
+			if FOPEN(_f_dupsource, 'r') {
+				// 複製元の各行を複製先に書き込む
+				while 1 {
+					_l = FREAD(_f_dupsource)
+					if _l == -1 { FCLOSE(_f_dupsource); break }
+					FWRITE(_f_open, _l)
+				}
+			}
+			FCLOSE(_f_open)
+		}
+	}
+
+	//複製の有無や成否にかかわらずFOPEN
+	FOPEN(_f_open, _argv[1])
+}
 
 //変数名を汎用配列で一度に指定してERASEVAR
 ERASEVARS:void{
