@@ -1643,7 +1643,8 @@ Tags_Interpret_Inlinetag {
 			}
 		}
 		if _key == 'replace'{
-			_val = SPLIT(_val, C_LF)
+			//_val = SPLIT(_val, C_LF)
+			_val = SPLIT(_val, ',')
 			_valfrom = _val[0]
 			_valto = _val[1]
 			if _valfrom != '' && _valfrom _in_ _result{
