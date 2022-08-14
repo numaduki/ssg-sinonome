@@ -163,8 +163,10 @@ sinonome_load{
 		LOGGING2('エラー：設定ファイルの記述が不足しています。'); 0; return
 	}else{
 
-		//G_OUTPUTDIRはプロファイルディレクトリの中に作成するので
-		G_OUTPUTDIR = G_PROFILEDIRPATH + C_YEN + G_OUTPUTDIR
+		if ':' !_in_ G_OUTPUTDIR {
+			//G_OUTPUTDIRはプロファイルディレクトリの中に作成するので
+			G_OUTPUTDIR = G_PROFILEDIRPATH + C_YEN + G_OUTPUTDIR
+		}
 
 		LOGGING2('ロード処理..変数が再現されました。')
 	}
