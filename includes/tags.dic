@@ -1219,6 +1219,10 @@ Tags_Interpret_Inlinetag {
 		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]*?\\', '..\')
 		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]+?\\', '..\')
 		_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.\\]+?\\', '..\')
+
+		//「./」は特に意味がないので消す
+		_pathofcaller = Tags_CleanRelPath(_pathofcaller)
+
 		//最後の\より後ろを削除（\残す）
 		_pathofcaller_tmp = SPLIT(_pathofcaller, C_YEN)
 		_pathofcaller = ''
@@ -1262,6 +1266,10 @@ Tags_Interpret_Inlinetag {
 		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]*?\\', '..\')
 		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]+?\\', '..\')
 		_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.\\]+?\\', '..\')
+
+		//「./」は特に意味がないので消す
+		_pathofcaller = Tags_CleanRelPath(_pathofcaller)
+
 		//最後の\より後ろを削除（\残す）
 		_pathofcaller_tmp = SPLIT(_pathofcaller,C_YEN)
 		_pathofcaller = ''
@@ -1384,6 +1392,10 @@ Tags_Interpret_Inlinetag {
 		//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
 		//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
 		_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
+
+		//「./」は特に意味がないので消す
+		_owner_path = Tags_CleanRelPath(_owner_path)
+
 		//最後の\より後ろを削除（\残す）
 		_owner_path_tmp = SPLIT(_owner_path, C_YEN)
 		_owner_path = ''
@@ -1438,6 +1450,10 @@ Tags_Interpret_Inlinetag {
 			//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
 			//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
 			_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
+
+			//「./」は特に意味がないので消す
+			_owner_path = Tags_CleanRelPath(_owner_path)
+
 			//最後の\より後ろを削除（\残す）
 			_owner_path_tmp = SPLIT(_owner_path, C_YEN)
 			_owner_path = ''
@@ -1510,9 +1526,11 @@ Tags_Interpret_Inlinetag {
 			_fnam = IARRAY
 
 			_owner_path = G_SYS_CURRENTBASICPATH
+
 			//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
 			//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
 			_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
+
 			//最後の\より後ろを削除（\残す）
 			_owner_path_tmp = SPLIT(_owner_path, C_YEN)
 			_owner_path = ''
@@ -1590,6 +1608,10 @@ Tags_Interpret_Inlinetag {
 			for _i = 0; _i < ARRAYSIZE(_fnam); _i ++ {
 				_f = _fnam[_i]
 				_f = _owner_path + _archive_path + _f
+
+				//「./」は特に意味がないので消す
+				_f = Tags_CleanRelPath(_f)
+
 				_f = REPLACE(_f, C_YEN, '/')//hrefの値なので \ は / にする
 
 				_current_class = '';
@@ -1607,7 +1629,7 @@ Tags_Interpret_Inlinetag {
 	}
 	//動作検証不十分
 	//{root}
-	//大量に来ることが多いため、キャッシュ機構が必要
+	//大量に来ることが多いため、キャッシュ機構をテストしてみたがほぼ効果はなかった
 	if _myname == 'root'{
 		_owner_path = G_SYS_CURRENTBASICPATH
 		//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
@@ -1615,6 +1637,9 @@ Tags_Interpret_Inlinetag {
 		//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
 		_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
 		//LOGGING2(_owner_path)
+
+		//「./」は特に意味がないので消す
+		_owner_path = Tags_CleanRelPath(_owner_path)
 
 		//最後の\より後ろを削除（\残す）
 		_owner_path_tmp = SPLIT(_owner_path, C_YEN)
@@ -1682,7 +1707,7 @@ Tags_Interpret_Inlinetag {
 	//後の処理上、文字列を返す必要がある
 	//文字列以外の場合は文字列の形式に変換して返す
 	//
-	//2020-10-01 pagebody等にループタグを書くと無限に再起するので判定用の値を返す　(文字列値,ループを止めるなら1、続行なら0)
+	//2020-10-01 pagebody等にループタグを書くと無限に再帰するので判定用の値を返す　(文字列値,ループを止めるなら1、続行なら0)
 	_vtype = GETTYPE(_result)
 	if _vtype == 3{
 		//_result
@@ -1943,3 +1968,39 @@ Tags_ReplaceHeadingTags {
 //	//LOGGING2(_p+" "+_p2+" "+_p1d+" "+_r)
 //	_r
 //}
+
+Tags_CleanRelPath {
+	_s =  REPLACE(_argv[0], '/', C_YEN)
+	if STRSTR(_s, '.' + C_YEN, 0) == 0 {
+		_s = ERASE(_s, 0, 2)
+	}
+	while C_YEN + '.' + C_YEN _in_ _s {
+		_s = REPLACE(_s, C_YEN + '.' + C_YEN, C_YEN)
+	}
+	_s
+	// ..\ もスマートにできるかと思って実装しようとしたが
+	// よく考えたらそんなに単純でもないので保留
+	//	_rel = _argv[0]
+	//	//_a = SPLIT(_rel, C_YEN)
+	//	_a = RE_SPLIT(_rel, '[\\\/]')
+	//	//LOGGING2(TOSTR(_a))
+	//	_l = ARRAYSIZE(_a)
+	//	_r = ''
+	//	_f = 0
+	//	//_upcount = 0
+	//	for _i = 0; _i < _l; _i ++ {
+	//		if _a[_i] == '.' { continue }
+	//		//elseif _a[_i] == '..' { _upcount ++ }
+	//		else{
+	//			//if _upcount > 0 {
+	//			//	_upcount --
+	//			//	continue
+	//			//} else {
+	//				if (_f) { _r += C_YEN }
+	//				_r += _a[_i]
+	//				_f = 1
+	//			//}
+	//		}
+	//	}
+	//	_r
+}
