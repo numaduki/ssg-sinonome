@@ -144,7 +144,6 @@ sinonome_load{
 			_s[0] = CUTSPACE(_s[0])
 			_s[1] = CUTSPACE(_s[1])
 			_varname=''
-			_varname=''
 			if _s[0] == 'output_directory'{_varname = 'G_OUTPUTDIR'}
 			if _s[0] == 'output_skipifnotchange'{_varname = 'G_SKIPIFNOTCHANGE';_s[1]=TOINT(_s[1])}
 			if _s[0] == 'archive_autosplit_entrycount'{_varname = 'G_AUTOSPLIT_COUNT';_s[1]=TOINT(_s[1])}
@@ -156,11 +155,17 @@ sinonome_load{
 			if _s[0] == 'template_directory'{_varname = 'G_TEMPLATEDIR'}
 			if _varname{
 				LETTONAME(_varname,_s[1])
-				LOGGING2('変数設定: ' + _varname + ' = ' + _s[1])
+				LOGGING2('変数設定: ' + _s[0] + ' = ' + _s[1])
 			}
 
-			if _s[0] == 'entries_file'{G_ENTRIESFILES ,= _s[1]}
-			if _s[0] == 'webpages_file'{G_WEBPAGESFILES ,= _s[1]}
+			if _s[0] == 'entries_file'{
+				G_ENTRIESFILES ,= _s[1]
+				LOGGING2('変数設定: ' + _s[0] + ' ,= ' + _s[1])
+			}
+			if _s[0] == 'webpages_file'{
+				G_WEBPAGESFILES ,= _s[1]
+				LOGGING2('変数設定: ' + _s[0] + ' ,= ' + _s[1])
+			}
 
 		}
 	}
