@@ -1467,7 +1467,6 @@ Tags_Interpret_Inlinetag {
 					_tmp = RE_GETSTR[1]
 				}else{
 					_tmp = G_ENTRYFILES_NAME[_m_index]
-					_tmp = SPLITPATH(_tmp)[2]
 				}
 
 				if RE_SEARCH(C_LF + G_ENTRYFILES_META[_m_index] + C_LF, C_LF + 'FILENAME: (.*?)' + C_LF){
@@ -1544,7 +1543,6 @@ Tags_Interpret_Inlinetag {
 					_tmp = RE_GETSTR[1]
 				}else{
 					_tmp = G_ENTRYFILES_NAME[_m_index]
-					_tmp = SPLITPATH(_tmp)[2]
 				}
 
 				if RE_SEARCH ( /

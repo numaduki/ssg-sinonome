@@ -167,8 +167,7 @@ ArchiveTemplate_Output_EntryArchive{
 			if RE_SEARCH(C_LF + G_ENTRYFILES_META[0] + C_LF,C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
 				_pathpart=RE_GETSTR[1]
 			}else{
-				_pathpart=SPLITPATH(G_ENTRYFILES_NAME[0])
-				_pathpart=_pathpart[2]
+				_pathpart=G_ENTRYFILES_NAME[0]
 			}
 
 			if RE_SEARCH(C_LF + G_ENTRYFILES_META[0] + C_LF,C_LF + 'FILENAME: (.*?)' + C_LF){

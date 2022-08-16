@@ -68,7 +68,7 @@ Tags_Load{
 }
 
 Entries_Load{
-	if Entries_Webpages_Load_Sub(C_DIR_ENTRY, 'entry'){
+	if Entries_Webpages_Load_Sub('entry', C_DIR_ENTRY, G_ENTRIESFILES){
 		G_ENTRYFILES_NAME       = G_TMP_DATAFILES_NAME
 		G_ENTRYFILES_META       = G_TMP_DATAFILES_META
 		G_ENTRYFILES_ENTRYCOUNT = G_TMP_DATAFILES_DATACOUNT
@@ -84,7 +84,7 @@ Entries_Load{
 
 Webpages_Load{
 	//ウェブページは見た目順なので配列の並びを逆にする
-	if Entries_Webpages_Load_Sub(C_DIR_WEBPAGE, 'webpage'){
+	if Entries_Webpages_Load_Sub('webpage', C_DIR_WEBPAGE, G_WEBPAGESFILES){
 		G_WEBPAGEFILES_NAME         = G_TMP_DATAFILES_NAME
 		G_WEBPAGEFILES_META         = G_TMP_DATAFILES_META
 		G_WEBPAGEFILES_WEBPAGECOUNT = G_TMP_DATAFILES_DATACOUNT
@@ -99,28 +99,32 @@ Webpages_Load{
 }
 
 Entries_Webpages_Load_Sub{
-	_directory=_argv[0]//ファイルを置いてあるディレクトリ名 \つき
+	_array_datafile_fullpath = IARRAY
+	for _i = 1; _i < _argc; _i ++ {
+		_file = _argv[_i] // ファイルを置いてあるディレクトリ名（\つき） またはファイル
+LOGGING2(_file)
+		_fattr = FATTRIB(_file)
+		if _fattr == -1 { continue }
+		if _fattr[2] == 1 {
+			//ディレクトリなので中にあるファイルを列挙
+			_tmp = SORTARRAY(FENUMALL(_file))
+			_tmp = _file + _tmp
+			_array_datafile_fullpath ,= _tmp
+		} else {
+			_array_datafile_fullpath ,= _file
+		}
+	}
 
-	//デフォルトの並び順が記事とウェブページとでは異なる
-	//
-	//記事ファイルはふつうファイル名は辞書順に大きくなっていき、(2020.html→2021.html→…)
-	//かつ記事は一番上に追加されていく
-	//よって記事はファイル名降順 z..a、かつファイルの先頭から並んでいる
-
-	//ウェブページは特殊な時系列はないので
-	//単純にファイル名順かつ上から並んでいる
-	//よってファイル名昇順 a..z かつファイルの先頭から順に取る
-
-	G_TMP_DATAFILES_NAME = SORTARRAY(FENUMALL(_directory))
-	if _argv[1] == 'entry' {
-		G_TMP_DATAFILES_NAME = TURNARRAY(G_TMP_DATAFILES_NAME)
+	G_TMP_DATAFILES_NAME = IARRAY
+	foreach _array_datafile_fullpath; _i {
+		G_TMP_DATAFILES_NAME ,= SPLITPATH(_i)[2]
 	}
 
 	//「-」を始まるファイルの場合はスキップ
 	for _i=ARRAYSIZE(G_TMP_DATAFILES_NAME)-1;0<=_i;_i--{
-//		if STRSTR(G_TMP_DATAFILES_NAME[_i],'.html',0)<0{
 		if STRSTR(G_TMP_DATAFILES_NAME[_i],'-',0) == 0{
 			G_TMP_DATAFILES_NAME[_i]=IARRAY()
+			_array_datafile_fullpath[_i]=IARRAY()
 		}
 	}
 	G_TMP_DATAFILES_DATACOUNT=IARRAY()
@@ -142,15 +146,16 @@ Entries_Webpages_Load_Sub{
 
 	//_iolog_set_on = ( GETSETTING('iolog') == 'on' )
 
-	foreach G_TMP_DATAFILES_NAME;_fname{
-		_fnameo = _fname
-		_fname = _directory + _fname
+	for _i = 0; _i < ARRAYSIZE(_array_datafile_fullpath); _i ++ {
+		_fpath = _array_datafile_fullpath[_i]
+		_fname = G_TMP_DATAFILES_NAME[_i]
+		//_fpath = _directory + _fpath
 		_file_text = ''
 		_r = 0
-		if FOPEN(_fname,'r'){
+		if FOPEN(_fpath,'r'){
 			while 1{
-				_l = FREAD(_fname);
-				if _l == -1{FCLOSE(_fname);break}
+				_l = FREAD(_fpath);
+				if _l == -1{FCLOSE(_fpath);break}
 				_file_text += _l + C_LF
 			}
 
@@ -171,8 +176,6 @@ Entries_Webpages_Load_Sub{
 			_file_meta = _tmp[1]
 			// ファイルの本体
 
-			_split_fnameo =  SPLIT(_fnameo, '.', 2)
-
 			//内部で使用するmeta情報を追加
 			//OUTPUTPATHを追加しているが、既に記載されている場合はそちらが優先される
 			//（最初に書かれている方が優先される）
@@ -190,16 +193,16 @@ Entries_Webpages_Load_Sub{
 				// セパレータのカスタム情報を取ってオーバーライド
 				//if RE_SEARCH(C_LF + _file_meta + C_LF, C_LF + 'SEP: (.*?)' + C_LF) { _C_SEP = RE_GETSTR[1] }
 				//if RE_SEARCH(C_LF + _file_meta + C_LF, C_LF + 'SECTIONSEP: (.*?)' + C_LF) { _C_SECTIONSEP = RE_GETSTR[1] }
-				//G_TMP_DATAFILES_META ,= _file_meta + C_LF + 'OUTPUTPATH: ' + SPLIT(_fnameo, '.', 2)[0] + C_LF
+				//G_TMP_DATAFILES_META ,= _file_meta + C_LF + 'OUTPUTPATH: ' + SPLIT(_fname, '.', 2)[0] + C_LF
 				G_TMP_DATAFILES_META ,=/
 					_file_meta + C_LF +/
-					'OUTPUTPATH: ' + _split_fnameo[0] + C_LF +/
-					'SYS_DATAFILE_FILENAME: ' + _split_fnameo[0] + C_LF
+					'OUTPUTPATH: ' + _fname + C_LF +/
+					'SYS_DATAFILE_FILENAME: ' + _fname + C_LF
 			} else {
 				G_TMP_DATAFILES_META ,=/
 					C_LF +/
-					'OUTPUTPATH: ' + _split_fnameo[0] + C_LF +/
-					'SYS_DATAFILE_FILENAME: ' + _split_fnameo[0] + C_LF
+					'OUTPUTPATH: ' + _fname + C_LF +/
+					'SYS_DATAFILE_FILENAME: ' + _fname + C_LF
 			}
 
 			_append_each_entry_head = ''
@@ -502,20 +505,20 @@ Entries_Webpages_Load_Sub{
 			_r=1
 		}
 		if _r{
-			if _argv[1] != 'entry' {
+			if _argv[0] != 'entry' {
 				_sys_datafileindex++
 			}
 		}else{
-			LOGGING2('ファイルを読み込めません：' + _fname)
+			LOGGING2('ファイルを読み込めません：' + _fpath)
 			continue
 		}
 	}
 
 	//if _iolog_set_on { _a = SETSETTING('iolog', 'on') }
 
-	if _argv[1] == 'entry' {
+	if _argv[0] == 'entry' {
 		G_TMP_DATAFILES_NAME = IARRAY()
-		G_TMP_DATAFILES_NAME ,= "-sortedbydate.md"
+		G_TMP_DATAFILES_NAME ,= "-sortedbydate"
 		G_TMP_DATAFILES_META = IARRAY()
 		G_TMP_DATAFILES_META ,= "OUTPUTPATH: ."
 		_sum = 0;
