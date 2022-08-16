@@ -822,12 +822,16 @@ Copy_ThemeFiles{
 }
 
 Copy_SourceMediaFiles{
+	if FATTRIB(C_DIR_FILES) == -1 {
+		LOGGING2(C_DIR_FILES + ' .. 存在しません')
+		1; return
+	}
 	_files = FENUMALL2(C_DIR_FILES)
 
 	_targetdir = G_OUTPUTDIR + 'files' + C_YEN
 
 	foreach _files; _f{
-
+		
 		_f = SUBSTR(_f, STRLEN(C_DIR_FILES), STRLEN(_f))
 		if !COPYFILE(C_DIR_FILES, _f, _targetdir){
 			//0; return

@@ -334,7 +334,7 @@ sinonome_request_exec{
 			'COPYING THEME FILES HAS SOMETHING ERROR'
 			return
 		}else{
-			LOGGING2('テーマファイルをコピーしました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
+			LOGGING2('テーマファイルのコピー処理を行いました。'+'('+(GETTICKCOUNT()-_t)+'msec)')
 		}
 	}
 
