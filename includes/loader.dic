@@ -102,7 +102,6 @@ Entries_Webpages_Load_Sub{
 	_array_datafile_fullpath = IARRAY
 	for _i = 1; _i < _argc; _i ++ {
 		_file = _argv[_i] // ファイルを置いてあるディレクトリ名（\つき） またはファイル
-LOGGING2(_file)
 		_fattr = FATTRIB(_file)
 		if _fattr == -1 { continue }
 		if _fattr[2] == 1 {

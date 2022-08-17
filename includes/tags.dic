@@ -1973,14 +1973,12 @@ Tags_ReplaceHeadingTags {
 
 Tags_CleanRelPath {
 	_s =  REPLACE(_argv[0], '/', C_YEN)
-LOGGING2('A: '+_s)
 	while C_YEN + '.' + C_YEN _in_ _s {
 		_s = REPLACE(_s, C_YEN + '.' + C_YEN, C_YEN)
 	}
 	if STRSTR(_s, '.' + C_YEN, 0) == 0 {
 		_s = ERASE(_s, 0, 2)
 	}
-LOGGING2('B: '+_s)
 	_s
 	// ..\ もスマートにできるかと思って実装しようとしたが
 	// よく考えたらそんなに単純でもないので保留
