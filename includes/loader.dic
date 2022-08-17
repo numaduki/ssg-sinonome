@@ -828,7 +828,8 @@ Copy_SourceMediaFiles{
 	}
 	_files = FENUMALL2(C_DIR_FILES)
 
-	_targetdir = G_OUTPUTDIR + 'files' + C_YEN
+	//_targetdir = G_OUTPUTDIR + 'files' + C_YEN
+	_targetdir = G_OUTPUTDIR + G_FILESCOPYDIR
 
 	foreach _files; _f{
 		

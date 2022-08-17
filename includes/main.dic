@@ -131,8 +131,10 @@ sinonome_load{
 
 	_config_file = G_PROFILEDIRPATH + C_YEN + 'settings.txt'
 
+	//初期値のあるプロファイル設定用のグローバル変数
 	G_ENTRIESFILES = IARRAY
 	G_WEBPAGESFILES = IARRAY
+	G_FILESCOPYDIR = ''
 
 	//設定ファイルの読み込みと変数再現
 	if FOPENWITHDUP(_config_file, 'r', G_PROFILEDIRPATH + C_YEN + 'settings_default.txt'){
@@ -153,6 +155,7 @@ sinonome_load{
 			if _s[0] == 'public_html_url'{_varname = 'G_SITEURL'}
 			if _s[0] == 'remove_blankline'{_varname = 'G_REMOVEBLANKLINE'; _s[1] = TOINT(_s[1])}
 			if _s[0] == 'template_directory'{_varname = 'G_TEMPLATEDIR'}
+			if _s[0] == 'files_copy_directory'{_varname = 'G_FILESCOPYDIR'}
 			if _varname{
 				LETTONAME(_varname,_s[1])
 				LOGGING2('変数設定: ' + _s[0] + ' = ' + _s[1])
