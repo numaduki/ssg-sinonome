@@ -161,13 +161,15 @@ sinonome_load{
 				LOGGING2('変数設定: ' + _s[0] + ' = ' + _s[1])
 			}
 
-			if _s[0] == 'entries_file'{
-				G_ENTRIESFILES ,= _s[1]
-				LOGGING2('変数設定: ' + _s[0] + ' ,= ' + _s[1])
-			}
-			if _s[0] == 'webpages_file'{
-				G_WEBPAGESFILES ,= _s[1]
-				LOGGING2('変数設定: ' + _s[0] + ' ,= ' + _s[1])
+			if _s[0] == 'entries_file' || _s[0] == 'webpages_file' {
+				_tmp = SPLITPATH(_s[1]);
+				if _tmp {
+					LOGGING2('変数設定: ' + _s[0] + ' ,= ' + _s[1])
+					// 相対パスの場合は前にプロファイルディレクトリをくっつける
+					if ! _tmp[0] { _s[1] = G_PROFILEDIRPATH + C_YEN + _s[1] }
+					if _s[0] == 'entries_file' { G_ENTRIESFILES ,= _s[1] }
+					if _s[0] == 'webpages_file' { G_WEBPAGESFILES ,= _s[1] }
+				}
 			}
 
 		}
