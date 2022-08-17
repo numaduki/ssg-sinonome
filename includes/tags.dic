@@ -1220,9 +1220,6 @@ Tags_Interpret_Inlinetag {
 		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]+?\\', '..\')
 		_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.\\]+?\\', '..\')
 
-		//「./」は特に意味がないので消す
-		_pathofcaller = Tags_CleanRelPath(_pathofcaller)
-
 		//最後の\より後ろを削除（\残す）
 		_pathofcaller_tmp = SPLIT(_pathofcaller, C_YEN)
 		_pathofcaller = ''
@@ -1252,6 +1249,10 @@ Tags_Interpret_Inlinetag {
 		)
 //		_result=_pathofcaller + _archive_path + _fnam + '.html'
 		_result = _pathofcaller + _archive_path
+
+		//「./」は特に意味がないので消す
+		_result = Tags_CleanRelPath(_result)
+
 		_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
 	}
 	//{entrylink}
@@ -1266,9 +1267,6 @@ Tags_Interpret_Inlinetag {
 		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]*?\\', '..\')
 		//_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.]+?\\', '..\')
 		_pathofcaller = RE_REPLACE(_pathofcaller, '[^\.\\]+?\\', '..\')
-
-		//「./」は特に意味がないので消す
-		_pathofcaller = Tags_CleanRelPath(_pathofcaller)
 
 		//最後の\より後ろを削除（\残す）
 		_pathofcaller_tmp = SPLIT(_pathofcaller,C_YEN)
@@ -1300,6 +1298,10 @@ Tags_Interpret_Inlinetag {
 
 //		_result=_pathofcaller + _archive_path + _fnam + '.html'
 		_result = _pathofcaller + _archive_path
+
+		//「./」は特に意味がないので消す
+		_result = Tags_CleanRelPath(_result)
+
 		_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
 	}
 	//{entrybasename}
@@ -1393,9 +1395,6 @@ Tags_Interpret_Inlinetag {
 		//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
 		_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
 
-		//「./」は特に意味がないので消す
-		_owner_path = Tags_CleanRelPath(_owner_path)
-
 		//最後の\より後ろを削除（\残す）
 		_owner_path_tmp = SPLIT(_owner_path, C_YEN)
 		_owner_path = ''
@@ -1418,6 +1417,10 @@ Tags_Interpret_Inlinetag {
 		}
 
 		_result = _owner_path + _archive_path + _fnam
+
+		//「./」は特に意味がないので消す
+		_result = Tags_CleanRelPath(_result)
+
 		_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
 	}
 	//{archivepagenum}
@@ -1450,9 +1453,6 @@ Tags_Interpret_Inlinetag {
 			//_owner_path = RE_REPLACE(_owner_path, '[^\.]*?\\', '..\')
 			//_owner_path = RE_REPLACE(_owner_path, '[^\.]+?\\', '..\')
 			_owner_path = RE_REPLACE(_owner_path, '[^\.\\]+?\\', '..\')
-
-			//「./」は特に意味がないので消す
-			_owner_path = Tags_CleanRelPath(_owner_path)
 
 			//最後の\より後ろを削除（\残す）
 			_owner_path_tmp = SPLIT(_owner_path, C_YEN)
@@ -1506,6 +1506,10 @@ Tags_Interpret_Inlinetag {
 			}
 
 			_result = _owner_path + _archive_path + _fnam
+
+			//「./」は特に意味がないので消す
+			_result = Tags_CleanRelPath(_result)
+
 			_result = REPLACE(_result, C_YEN, '/')//hrefの値なので \ は / にする
 		}else{
 			//archive_typeが指定されていない場合は何も返さない
@@ -1969,12 +1973,14 @@ Tags_ReplaceHeadingTags {
 
 Tags_CleanRelPath {
 	_s =  REPLACE(_argv[0], '/', C_YEN)
-	if STRSTR(_s, '.' + C_YEN, 0) == 0 {
-		_s = ERASE(_s, 0, 2)
-	}
+LOGGING2('A: '+_s)
 	while C_YEN + '.' + C_YEN _in_ _s {
 		_s = REPLACE(_s, C_YEN + '.' + C_YEN, C_YEN)
 	}
+	if STRSTR(_s, '.' + C_YEN, 0) == 0 {
+		_s = ERASE(_s, 0, 2)
+	}
+LOGGING2('B: '+_s)
 	_s
 	// ..\ もスマートにできるかと思って実装しようとしたが
 	// よく考えたらそんなに単純でもないので保留
