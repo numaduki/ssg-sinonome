@@ -1060,28 +1060,15 @@ Tags_Interpret_Inlinetag {
 		}
 	}
 
-	//{tagname}
-	if _myname == 'tagname'{
+	//{tagname} {tagid} {tagdescription}
+	if _myname == 'tagname' || _myname == 'tagid' || _myname == 'tagdescription'{
 		if _contexttype != C_CTXTTYPE_TAG{e_outofcontext(_myname);'';return}
-		if _m_index < 0{e_outofindex(_myname);'';return}
+		if _m_index < 0 { e_outofindex(_myname); ''; return }
 		_tmp = G_TAGS[_m_index]
-		_result = SPLIT(_tmp, ',')[0]
-	}
-
-	//{tagid}
-	if _myname == 'tagid'{
-		if _contexttype != C_CTXTTYPE_TAG{e_outofcontext(_myname);'';return}
-		if _m_index < 0{e_outofindex(_myname);'';return}
-		_tmp = G_TAGS[_m_index]
-		_result = SPLIT(_tmp, ',')[1]
-	}
-
-	//{tagdescription}
-	if _myname == 'tagdescription'{
-		if _contexttype != C_CTXTTYPE_TAG{e_outofcontext(_myname);'';return}
-		if _m_index < 0{e_outofindex(_myname);'';return}
-		_tmp = G_TAGS[_m_index]
-		_result = SPLIT(_tmp, ',')[2]
+		_result = SPLIT(_tmp, ',')
+		if _myname == 'tagid' { _result = _result[1] }
+		elseif _myname == 'tagdescription' { _result = _result[2] }
+		else { _result = _result[0] }
 	}
 
 	//{pagedate}
@@ -1389,6 +1376,22 @@ Tags_Interpret_Inlinetag {
 			_result=''
 		}
 	}
+
+	//{archivedescription}
+	if _myname == 'archivedescription'{
+		if _contexttype != C_CTXTTYPE_ARCHIVE{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+
+		_m_archive_type = getModifierVal('archive_type', '', 'STR', _parentmodifier, ('',_contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+
+		if _m_archive_type == 'tagarchive' {
+			_result = G_TAGS[_m_index]
+			_result = TRIM(_result[2, ','])
+		}else{
+			_result=''
+		}
+	}
+
 	//{taglink}
 	if _myname == 'taglink'{
 		if _contexttype != C_CTXTTYPE_TAG { e_outofcontext(_myname); ''; return}
