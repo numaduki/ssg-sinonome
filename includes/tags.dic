@@ -1076,6 +1076,14 @@ Tags_Interpret_Inlinetag {
 		_result = SPLIT(_tmp, ',')[1]
 	}
 
+	//{tagdescription}
+	if _myname == 'tagdescription'{
+		if _contexttype != C_CTXTTYPE_TAG{e_outofcontext(_myname);'';return}
+		if _m_index < 0{e_outofindex(_myname);'';return}
+		_tmp = G_TAGS[_m_index]
+		_result = SPLIT(_tmp, ',')[2]
+	}
+
 	//{pagedate}
 	if _myname == 'pagedate'{
 		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
