@@ -1349,12 +1349,13 @@ Tags_Interpret_Inlinetag {
 		}
 		_result = _tmp
 	}
-	//{archivetitle}
-	if _myname == 'archivetitle'{
-		if _contexttype != C_CTXTTYPE_ARCHIVE{e_outofcontext(_myname);'';return}
-		if _m_index < 0{e_outofindex(_myname);'';return}
+	//{archivetitle} {archivedescription}
+	if _myname == 'archivetitle' || _myname == 'archivedescription' {
+		if _contexttype != C_CTXTTYPE_ARCHIVE { e_outofcontext(_myname); ''; return }
+		if _m_index < 0 { e_outofindex(_myname); ''; return }
 
 		_m_archive_type = getModifierVal('archive_type', '', 'STR', _parentmodifier, ('',_contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+
 		//if _m_archive_type == 'entryarchive' {
 		//	_tmp=G_ENTRYFILES_META[_m_index]
 		//	if _tmp && RE_SEARCH(C_LF + _tmp + C_LF, C_LF + 'TITLE: (.*?)' + C_LF){
@@ -1369,24 +1370,14 @@ Tags_Interpret_Inlinetag {
 		//		_result = SPLITPATH(_tmp)[2]
 		//	}
 		//} elseif _m_archive_type == 'tagarchive' {
-		if _m_archive_type == 'tagarchive' {
-			_result = G_TAGS[_m_index]
-			_result = TRIM(_result[0, ','])
-		}else{
-			_result=''
-		}
-	}
 
-	//{archivedescription}
-	if _myname == 'archivedescription'{
-		if _contexttype != C_CTXTTYPE_ARCHIVE{e_outofcontext(_myname);'';return}
-		if _m_index < 0{e_outofindex(_myname);'';return}
-
-		_m_archive_type = getModifierVal('archive_type', '', 'STR', _parentmodifier, ('',_contextmodifier)[_contexttype == C_CTXTTYPE_ARCHIVE])
+		_result = SPLIT(G_TAGS[_m_index], ',')
+		_tmp = 0
+		if _myname == 'archivedescription' { _tmp = 2 }
+		//elseif _myname == 'archivetitle' { _tmp = 0 }
 
 		if _m_archive_type == 'tagarchive' {
-			_result = G_TAGS[_m_index]
-			_result = TRIM(_result[2, ','])
+			_result = TRIM(_result[_tmp])
 		}else{
 			_result=''
 		}
