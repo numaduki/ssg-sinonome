@@ -1125,7 +1125,7 @@ Tags_Interpret_Inlinetag {
 		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
 		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
 		_mod_hlv = TOINT(_mod_tmp[0])
-		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_tmp[1] + ' ')
 
 		_tmp = G_WEBPAGEBODY[_m_index]
 		if _mod_hlv {
@@ -1144,7 +1144,7 @@ Tags_Interpret_Inlinetag {
 		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
 		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
 		_mod_hlv = TOINT(_mod_tmp[0])
-		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_tmp[1] + ' ')
 
 		_tmp = G_WEBPAGEMORE[_m_index]
 		if _mod_hlv {
@@ -1188,7 +1188,7 @@ Tags_Interpret_Inlinetag {
 		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
 		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
 		_mod_hlv = TOINT(_mod_tmp[0])
-		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_tmp[1] + ' ')
 
 		_tmp = G_ENTRYBODY[_m_index]
 		if _mod_hlv {
@@ -1207,7 +1207,7 @@ Tags_Interpret_Inlinetag {
 		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
 		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
 		_mod_hlv = TOINT(_mod_tmp[0])
-		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_tmp[1] + ' ')
 
 		_tmp = G_ENTRYMORE[_m_index]
 		if _mod_hlv {
