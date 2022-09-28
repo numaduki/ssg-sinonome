@@ -1121,11 +1121,15 @@ Tags_Interpret_Inlinetag {
 	if _myname == 'pagebody'{
 		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
 		if _m_index < 0{e_outofindex(_myname);'';return}
-		//_result = G_WEBPAGEBODY[_m_index]
-		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+
+		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
+		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
+		_mod_hlv = TOINT(_mod_tmp[0])
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+
 		_tmp = G_WEBPAGEBODY[_m_index]
 		if _mod_hlv {
-			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv, _mod_hlv_opt)
 		}
 
 		_result = TmplTag_Escape(_tmp)
@@ -1136,11 +1140,15 @@ Tags_Interpret_Inlinetag {
 	if _myname == 'pagemore'{
 		if _contexttype != C_CTXTTYPE_WEBPAGE{e_outofcontext(_myname);'';return}
 		if _m_index < 0{e_outofindex(_myname);'';return}
-		//_result=G_WEBPAGEMORE[_m_index]
-		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+
+		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
+		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
+		_mod_hlv = TOINT(_mod_tmp[0])
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+
 		_tmp = G_WEBPAGEMORE[_m_index]
 		if _mod_hlv {
-			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv, _mod_hlv_opt)
 		}
 
 		_result = TmplTag_Escape(_tmp)
@@ -1176,11 +1184,15 @@ Tags_Interpret_Inlinetag {
 	if _myname == 'entrybody'{
 		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
 		if _m_index < 0{e_outofindex(_myname);'';return}
-		//_result = G_ENTRYBODY[_m_index]
-		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+
+		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
+		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
+		_mod_hlv = TOINT(_mod_tmp[0])
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+
 		_tmp = G_ENTRYBODY[_m_index]
 		if _mod_hlv {
-			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv, _mod_hlv_opt)
 		}
 
 		_result = TmplTag_Escape(_tmp)
@@ -1191,11 +1203,15 @@ Tags_Interpret_Inlinetag {
 	if _myname == 'entrymore'{
 		if _contexttype != C_CTXTTYPE_ENTRY{e_outofcontext(_myname);'';return}
 		if _m_index < 0{e_outofindex(_myname);'';return}
-		//_result = G_ENTRYMORE[_m_index]
-		_mod_hlv = getModifierVal('headinglevel', 0, 'INT', _mymod)
+
+		_mod_tmp = getModifierVal('headinglevel', '0', 'STR', _mymod)
+		_mod_tmp = SPLIT(_mod_tmp, ',', 2)
+		_mod_hlv = TOINT(_mod_tmp[0])
+		_mod_hlv_opt = (' noclass ' _in_ ' ' + _mod_hlv_tmp[1] + ' ')
+
 		_tmp = G_ENTRYMORE[_m_index]
 		if _mod_hlv {
-			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv)
+			_tmp = Tags_ReplaceHeadingTags(_tmp, _mod_hlv, _mod_hlv_opt)
 		}
 
 		_result = TmplTag_Escape(_tmp)
@@ -1937,11 +1953,16 @@ Tags_VarCollection_GetVar{
 Tags_ReplaceHeadingTags {
 	_src = _argv[0]
 	_mod_hlv = _argv[1]
+	_mod_noclass = _argv[2]
 	if _mod_hlv < 1 { _mod_hlv = 1 }
 	for _i = 2; _i <= 6; _i++  {
 		if _mod_hlv > 6 {_mod_hlv = 6} //h6までしかないので
 		//終了タグも置き換えないといけない
-		_src = REPLACE(_src, '<h'+_i, '<tmp_h'+_mod_hlv+' class="heading'+(_i-1)+'"')
+		if _mod_noclass {
+			_src = REPLACE(_src, '<h'+_i, '<tmp_h'+_mod_hlv)
+		} else {
+			_src = REPLACE(_src, '<h'+_i, '<tmp_h'+_mod_hlv+' class="heading'+(_i-1)+'"')
+		}
 		_src = REPLACE(_src, '</h'+_i, '</tmp_h'+_mod_hlv)
 		_mod_hlv ++
 	}
