@@ -355,8 +355,11 @@ Tags_Interpret {
 						_taged_entry_index2 ,= _taged_entry_index[_n]
 					}
 
+					_count_tmp = 0
 					foreach _taged_entry_index2 ; _j{
 						_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
+						_count_tmp ++
+						_part_tmp = REPLACE(_part_tmp, '__counter__', TOSTR(_count_tmp))
 						_part2+=Tags_Interpret(/
 							_part_tmp,/
 							_myname,/
@@ -365,8 +368,6 @@ Tags_Interpret {
 							' index=' + C_DQ + _j + C_DQ + ' '/
 						)
 					}
-
-
 
 				}
 				elseif _m_archivetype == 'tagarchive'{
@@ -401,8 +402,11 @@ Tags_Interpret {
 						}
 					}
 
+					_count_tmp = 0
 					foreach _taged_entry_index ; _j{
 						_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
+						_count_tmp ++
+						_part_tmp = REPLACE(_part_tmp, '__counter__', TOSTR(_count_tmp))
 						_part2+=Tags_Interpret(/
 							_part_tmp,/
 							_myname,/
@@ -416,8 +420,11 @@ Tags_Interpret {
 					if ARRAYSIZE(G_ENTRYMETA)<_for_endcount{
 						_for_endcount=ARRAYSIZE(G_ENTRYMETA)
 					}
+					_count_tmp = 0
 					for _j=_m_offset;_j<_for_endcount;_j++{
 						_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
+						_count_tmp ++
+						_part_tmp = REPLACE(_part_tmp, '__counter__', TOSTR(_count_tmp))
 						_part2+=Tags_Interpret(/
 							_part_tmp,/
 							_myname,/
@@ -513,9 +520,12 @@ Tags_Interpret {
 					_for_endcount=ARRAYSIZE(G_WEBPAGEMETA)
 				}
 
+				_count_tmp = 0
 				for _j=_m_offset;_j<_for_endcount;_j++{
 
 					_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
+					_count_tmp ++
+					_part_tmp = REPLACE(_part_tmp, '__counter__', TOSTR(_count_tmp))
 
 					_part2+=Tags_Interpret(/
 						_part_tmp,/
@@ -781,9 +791,12 @@ Tags_Interpret {
 							if _loopend<0 {_loopend=0}
 						}
 
+						_count_tmp = 0
 						for _q=_arraysize-1;_loopend<=_q;_q--{
 							_q2=_part
 							_q2=REPLACE(_q2,'__index__',TOSTR(_q))
+							_count_tmp ++
+							_q2 = REPLACE(_q2, '__counter__', TOSTR(_count_tmp))
 							_dores=Tags_Interpret(/
 								_q2,/
 								_myname,/
@@ -805,10 +818,13 @@ Tags_Interpret {
 							_loopcount = _limit
 							if _arraysize<_loopcount {_loopcount=_arraysize}
 						}
-						
+
+						_count_tmp = 0
 						for _q=0;_q<_loopcount;_q++{
 							_q2=_part
 							_q2=REPLACE(_q2,'__index__',TOSTR(_q))
+							_count_tmp ++
+							_q2 = REPLACE(_q2, '__counter__', TOSTR(_count_tmp))
 							_dores=Tags_Interpret(/
 								_q2,/
 								_myname,/
