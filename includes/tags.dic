@@ -356,8 +356,9 @@ Tags_Interpret {
 					}
 
 					foreach _taged_entry_index2 ; _j{
+						_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
 						_part2+=Tags_Interpret(/
-							_part,/
+							_part_tmp,/
 							_myname,/
 							_mymod,/
 							C_CTXTTYPE_ENTRY,/
@@ -401,8 +402,9 @@ Tags_Interpret {
 					}
 
 					foreach _taged_entry_index ; _j{
+						_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
 						_part2+=Tags_Interpret(/
-							_part,/
+							_part_tmp,/
 							_myname,/
 							_mymod,/
 							C_CTXTTYPE_ENTRY,/
@@ -415,8 +417,9 @@ Tags_Interpret {
 						_for_endcount=ARRAYSIZE(G_ENTRYMETA)
 					}
 					for _j=_m_offset;_j<_for_endcount;_j++{
+						_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
 						_part2+=Tags_Interpret(/
-							_part,/
+							_part_tmp,/
 							_myname,/
 							_mymod,/
 							C_CTXTTYPE_ENTRY,/
@@ -512,10 +515,10 @@ Tags_Interpret {
 
 				for _j=_m_offset;_j<_for_endcount;_j++{
 
-					//_part_r = REPLACE(_part, '__INDEX__', TOSTR(_j))
+					_part_tmp = REPLACE(_part, '__index__', TOSTR(_j))
 
 					_part2+=Tags_Interpret(/
-						_part,/
+						_part_tmp,/
 						_myname,/
 						_mymod,/
 						C_CTXTTYPE_WEBPAGE,/
