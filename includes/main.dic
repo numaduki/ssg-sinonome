@@ -37,13 +37,17 @@ unload{
 
 	WRITEFILE(G_PROFILEDIRPATH + C_YEN + 'log.txt', G_LOG)
 
-	ERASEVAR('G_LOG')
 	ERASEVAR('G_PROFILEDIRPATH')
+	ERASEVAR('G_LOG')
 	ERASEVAR('C_STARTTIME')
 }
 
 request{
+	//_argv[0]はCR+LFで区切られたパラメータ一覧
+	//ただし最初の行は必ず「sinonome」という8バイトが入っている
+	G_EXECUTEPARAM = SPLIT(_argv[0], CHR(13) + C_LF)
 	sinonome_request(_argv[0])
+	ERASEVAR('G_EXECUTEPARAM')
 }
 
 //sinonome独自のロギング
@@ -73,17 +77,16 @@ INDEXOF {
 sinonome_load{
 
 	//LOGGING2('-- sinonome START. --')
-	_param = _argv
 
 	G_PROFILEDIRPATH = "profiles" + C_YEN + "default"
 
 	_profiledir = ''
 
-	_i = ASEARCH('-profile', _param)
+	_i = ASEARCH('-profile', G_EXECUTEPARAM)
 	if _i >= 0 {
 		//パラメータで指定されている
 		_error = 0
-		_s = INDEXOF(_i+1, _param)
+		_s = INDEXOF(_i+1, G_EXECUTEPARAM)
 		//LOGGING2(GETTYPE(_s))
 		_s = CUTSPACE(_s)
 		if ! _s {
@@ -214,16 +217,12 @@ sinonome_request{
 	//}else{
 	//		_a = SPLIT(_argv[0], CHR(13)+CHR(10));
 
-	//_argv[0]はCR+LFで区切られたパラメータ一覧
-	//ただし最初の行は必ず「sinonome」という8バイトが入っている
-	_param = SPLIT(_argv[0], CHR(13) + C_LF)
-
-	for _i=1; _i < ARRAYSIZE(_param); _i++ {
-		LOGGING2("起動パラメータ("+_i+"): "+_param[_i])
+	for _i=1; _i < ARRAYSIZE(G_EXECUTEPARAM); _i++ {
+		LOGGING2("起動パラメータ("+_i+"): "+G_EXECUTEPARAM[_i])
 	}
 
-	if sinonome_load(_param) {
-		sinonome_request_exec(_param)
+	if sinonome_load {
+		sinonome_request_exec
 	} else {
 		LOGGING2('エラー：データの読み込み時に問題が発生しました。処理を中断します。')
 	}
@@ -239,8 +238,6 @@ sinonome_request{
 }
 
 sinonome_request_exec{
-
-	_param = _argv
 
 	LOGGING2('処理を開始しています..')
 
@@ -295,11 +292,11 @@ sinonome_request_exec{
 		'ARCHIVE TEMPLATE LOADING HAS SOMETHING ERROR'
 		return
 	}else{
-		if ASEARCH('-nat', _param) >= 0 {
+		if ASEARCH('-nat', G_EXECUTEPARAM) >= 0 {
 			LOGGING2('-nat アーカイブテンプレートの処理をスキップしました')
 		} else {
 			LOGGING2('アーカイブテンプレートを処理しています..')
-			if !ArchiveTemplate_Output(_param){
+			if !ArchiveTemplate_Output {
 				'ARCHIVES TEMPLATE OUTPUT HAS SOMETHING ERROR'
 				return
 			} else {
@@ -315,7 +312,7 @@ sinonome_request_exec{
 		'INDEX TEMPLATE LOADING HAS SOMETHING ERROR'
 		return
 	}else{
-		if ASEARCH('-nit', _param) >= 0 {
+		if ASEARCH('-nit', G_EXECUTEPARAM) >= 0 {
 			LOGGING2('-nit インデックステンプレートの処理をスキップしました')
 		} else {
 			LOGGING2('インデックステンプレートを処理しています..')
@@ -329,7 +326,7 @@ sinonome_request_exec{
 	}
 
 	_t = GETTICKCOUNT()
-	if ASEARCH('-nfc', _param) >= 0 {
+	if ASEARCH('-nfc', G_EXECUTEPARAM) >= 0 {
 		LOGGING2('-nfc テーマファイルのコピーをスキップしました')
 	} else {
 		LOGGING2('テーマファイルをコピーしています..')

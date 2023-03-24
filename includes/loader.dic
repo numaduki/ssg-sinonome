@@ -613,8 +613,6 @@ ArchiveTemplate_Load{
 
 ArchiveTemplate_Output{
 
-	_param = _argv
-
 	//各アーカイブテンプレートを解釈してファイル出力
 	for _i=0;_i<ARRAYSIZE(G_ARCHIVEMETA);_i++{
 		//タイプ・形式・出力パスを取得
@@ -637,7 +635,7 @@ ArchiveTemplate_Output{
 		//したがって_archivetype で分岐して処理～出力まで行う
 		if _archivetype == 'ENTRY'{
 			//ブログ記事アーカイブ
-			if ASEARCH('-ne', _param) >= 0 {
+			if ASEARCH('-ne', G_EXECUTEPARAM) >= 0 {
 				LOGGING2('-ne ブログ記事アーカイブの処理をスキップしました。')
 			} else {
 				if !ArchiveTemplate_Output_Entry(_archivemapping, _i){
@@ -647,10 +645,10 @@ ArchiveTemplate_Output{
 				}
 			}
 		}elseif _archivetype == 'ENTRYARCHIVE'{
-			if ASEARCH('-nea', _param) >= 0 {
+			if ASEARCH('-nea', G_EXECUTEPARAM) >= 0 {
 				LOGGING2('-nea ブログ記事リストの処理をスキップしました。')
 			} else {
-				if ASEARCH('-neams', _param) >= 0 {
+				if ASEARCH('-neams', G_EXECUTEPARAM) >= 0 {
 					LOGGING2('-neams ブログ記事リストの処理をスキップしました。')
 				} else {
 					if !ArchiveTemplate_Output_EntryArchive(_archivemapping, _i){
@@ -661,7 +659,7 @@ ArchiveTemplate_Output{
 				}
 			}
 		}elseif _archivetype == 'WEBPAGE' {
-			if ASEARCH('-nwa', _param) >= 0 {
+			if ASEARCH('-nwa', G_EXECUTEPARAM) >= 0 {
 				LOGGING2('-nwa ウェブページアーカイブの処理をスキップしました。')
 			} else {
 				if !ArchiveTemplate_Output_Webpage(_archivemapping, _i){
@@ -671,7 +669,7 @@ ArchiveTemplate_Output{
 				}
 			}
 		}elseif _archivetype == 'TAGARCHIVE' {
-			if ASEARCH('-nta', _param) >= 0 {
+			if ASEARCH('-nta', G_EXECUTEPARAM) >= 0 {
 				LOGGING2('-nta タグ別記事アーカイブの処理をスキップしました。')
 			} else {
 				if !ArchiveTemplate_Output_TagArchive(_archivemapping, _i){
