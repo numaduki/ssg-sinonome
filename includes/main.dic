@@ -176,6 +176,8 @@ sinonome_load{
 			if _s[0] == 'public_html_url'{_varname = 'G_SITEURL'}
 			if _s[0] == 'remove_blankline'{_varname = 'G_REMOVEBLANKLINE'; _s[1] = TOINT(_s[1])}
 			if _s[0] == 'template_directory'{_varname = 'G_TEMPLATEDIR'}
+			if _s[0] == 'viewer_application'{_varname = 'G_VIEWERAPPLICATION'}
+			if _s[0] == 'viewer_option'{_varname = 'G_VIEWEROPTION'}
 			if _varname{
 				LETTONAME(_varname,_s[1])
 				LOGGING2('変数設定: ' + _s[0] + ' = ' + _s[1])
@@ -241,6 +243,8 @@ sinonome_request{
 }
 
 sinonome_request_exec{
+
+	G_RESULT = G_OUTPUTDIR
 
 	LOGGING2('処理を開始しています..')
 
@@ -341,7 +345,19 @@ sinonome_request_exec{
 		}
 	}
 
-	1
+	// 起動パラメータ -open で開く
+	// アプリケーションとオプションは settings.txt で設定
+	if ASEARCH('-open', G_EXECUTEPARAM) >= 0 && G_VIEWERAPPLICATION {
+		_opt = G_VIEWEROPTION
+		if _opt == '' { _opt = '$s' }
+		_opt = STRFORM(G_VIEWEROPTION, G_RESULT)
+		_tmp = EXECUTE(G_VIEWERAPPLICATION, _opt)
+	}
+
+	G_RESULT // 出力
+
+	ERASEVAR('G_RESULT')
+
 }
 
 //-----------------------------------------------
@@ -373,7 +389,8 @@ sinonome_unload{
 
 		'G_OUTPUTDIR','G_SKIPIFNOTCHANGE','G_AUTOSPLIT_COUNT',/
 		'G_SITETITLE','G_SITEDESCRIPTION','G_SITEAUTHOR',/
-		'G_SITEURL','G_TEMPLATEDIR','G_REMOVEBLANKLINE'/
+		'G_SITEURL','G_TEMPLATEDIR','G_REMOVEBLANKLINE',/
+		'G_VIEWERAPPLICATION', 'G_VIEWEROPTION' /
 	)
 
 	//setvar用変数

@@ -43,6 +43,7 @@ ArchiveTemplate_Output_GlobalReplace{
 }
 
 ArchiveTemplate_Output_Entry_Webpage_Sub{
+	_resultfname = ''
 	_archivemapping=_argv[0]
 	_i=_argv[1]
 	_type=_argv[2]
@@ -56,20 +57,32 @@ ArchiveTemplate_Output_Entry_Webpage_Sub{
 	_arraysize = ARRAYSIZE(_G_TMP_DATAMETA)
 	_startindex = 0
 
-	//テスト
 	//ヘッダにGENERATEONLYME のある最初の投稿のみ処理
-	//for _j = _startindex; _j < _arraysize; _j ++ {
-	//	if STRSTR(C_LF + _G_TMP_DATAMETA[_j] + C_LF, C_LF + 'GENERATEONLYME' + C_LF, 0) >= 0 {
-	//		_startindex = _j - 1
-	//		_arraysize = _startindex + 1 + 1 + 1
-	//		if _startindex < 0 { _startindex = 0 }
-	//		break;
-	//	}
-	//}
-
-	//テスト
-	//最初だけ処理
-	//_startindex = 0; _arraysize = 1
+	//-ea-latestonlyより優先（要検討）
+	if ASEARCH('-ea-flaggedonly', G_EXECUTEPARAM) >= 0 {
+		_flag = G_EXECUTEPARAM[ ASEARCH('-ea-flaggedonly', G_EXECUTEPARAM) + 1]
+		if (_flag) {
+			_exists = 0
+			for _j = _startindex; _j < _arraysize; _j ++ {
+				if STRSTR(C_LF + _G_TMP_DATAMETA[_j] + C_LF, C_LF + _flag + C_LF, 0) >= 0 {
+					_startindex = _j - 1
+					_arraysize = _startindex + 1 + 1 + 1
+					if _startindex < 0 { _startindex = 0 }
+					_exists = 1
+					break;
+				}
+			}
+			if _exists {
+				LOGGING2('-ea-flaggedonly 記事のメタ情報に「'+_flag+'」を含む最初の投稿のみ出力・更新します')
+			} else {
+				LOGGING2('-ea-flaggedonly 記事のメタ情報に「'+_flag+'」を含む投稿が見つかりません')
+				_arraysize = 0 //処理対象なし
+			}
+		}
+	} elseif ASEARCH('-ea-latestonly', G_EXECUTEPARAM) >= 0 {
+		LOGGING2('-ea-latestonly 日付が最も新しい投稿とその直後の投稿のみ記事アーカイブを出力・更新します')
+		_startindex = 0; _arraysize = 1 + 1// 次の記事まで出力（次・前の投稿へのリンクが更新されるように）
+	}
 
 	for _j = _startindex; _j < _arraysize; _j ++ {
 		_fname=''
@@ -142,17 +155,24 @@ ArchiveTemplate_Output_Entry_Webpage_Sub{
 			}
 			if _dooutput{
 				//ファイル名があるので出力
-					WRITEFILE(_fname,_parsed_code)
-
+				WRITEFILE(_fname,_parsed_code)
 //				if FOPEN(_fname,'w'){
 //					FWRITE2(_fname,_parsed_code);
 //					FCLOSE(_fname);
-		//	}
+//				}
+			}
+			//if _j == _startindex && ASEARCH('-ea-latestonly', G_EXECUTEPARAM) >= 0 {
+			if ! _resultfname {
+				_resultfname = _fname
 			}
 		}else{
 			//ファイル名ないので出力できない
 		}
 	}
+	if _resultfname {
+		G_RESULT = _resultfname
+	}
+	//LOGGING2("EW "+G_RESULT)
 	1
 }
 
@@ -160,6 +180,7 @@ ArchiveTemplate_Output_EntryArchive{
 	//記事ファイルごとに出力
 	LOGGING2('記事リストアーカイブ（アーカイブマッピング ' + _argv[0] + '）を処理..')
 
+	_resultfname = ''
 	_i = _argv[1]
 
 	_entrycount_file = G_ENTRYFILES_ENTRYCOUNT[0]
@@ -247,15 +268,24 @@ ArchiveTemplate_Output_EntryArchive{
 			if _dooutput{
 				WRITEFILE(_fname,_parsed_code)
 			}
+			if ! _resultfname {
+				_resultfname = _fname
+			}
 		}
 		//このファイル内でのオフセット値に加算
 		_this_file_offset += _entrycount_per_page
 	}
 
+	if _resultfname {
+		G_RESULT = _resultfname
+	}
+	//LOGGING2("EA "+G_RESULT)
+
 	1
 }
 
 ArchiveTemplate_Output_TagArchive{
+	_resultfname = ''
 	_archivemapping=_argv[0]
 	_i=_argv[1]
 	LOGGING2('タグ別記事アーカイブ（アーカイブマッピング ' + _archivemapping + '）を処理..')
@@ -341,7 +371,9 @@ ArchiveTemplate_Output_TagArchive{
 				if _dooutput{
 					WRITEFILE(_fname,_parsed_code)
 				}
-
+				if ! _resultfname {
+					_resultfname = _fname
+				}
 			}else{
 
 				//ファイル名ないので出力できない
@@ -351,6 +383,11 @@ ArchiveTemplate_Output_TagArchive{
 		}
 
 	}
+	if _resultfname {
+		G_RESULT = _resultfname
+	}
+	//LOGGING2("TA "+G_RESULT)
+
 	1
 }
 

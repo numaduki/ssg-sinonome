@@ -723,15 +723,16 @@ IndexTemplate_Load{
 	IndexTemplate_Load_Records(_tmpltext)
 }
 IndexTemplate_Output {
+	_resultfname = ''
 	for _i=0;_i<ARRAYSIZE(G_TMPLMETA);_i++{
 		_fname=''
-	if RE_SEARCH(G_TMPLMETA[_i],C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
-		_fname=RE_GETSTR[1]
-//			_fname=G_OUTPUTDIR + RE_GETSTR[1]
-	}else{
-		_fname=''
-	}
-//			_parsed_code=Tags_Interpret(G_TMPLBODY[_i],' basicpath=' + _fname + ' ',C_CTXTTYPE_INDEX,'')
+		if RE_SEARCH(G_TMPLMETA[_i],C_LF + 'OUTPUTPATH: (.*?)' + C_LF){
+			_fname=RE_GETSTR[1]
+			// _fname=G_OUTPUTDIR + RE_GETSTR[1]
+		}else{
+			_fname=''
+		}
+		// _parsed_code=Tags_Interpret(G_TMPLBODY[_i],' basicpath=' + _fname + ' ',C_CTXTTYPE_INDEX,'')
 		Tags_VarCollection_Init()
 		G_SYS_CURRENTBASICPATH=_fname
 
@@ -776,7 +777,16 @@ IndexTemplate_Output {
 //					FCLOSE(_fname);
 //				}
 		}
+
+		//最初のテンプレートの出力ファイルを結果とする
+		if ! _resultfname {
+			_resultfname = _fname
+		}
 	}
+	if _resultfname {
+		G_RESULT = _resultfname
+	}
+	//LOGGING2("IT "+G_RESULT)
 	1
 }
 
