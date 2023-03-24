@@ -53,7 +53,25 @@ ArchiveTemplate_Output_Entry_Webpage_Sub{
 	elseif _type == C_CTXTTYPE_WEBPAGE {_G_TMP_DATAMETA=G_WEBPAGEMETA}
 	else {return}
 
-	for _j=0;_j<ARRAYSIZE(_G_TMP_DATAMETA);_j++{
+	_arraysize = ARRAYSIZE(_G_TMP_DATAMETA)
+	_startindex = 0
+
+	//テスト
+	//ヘッダにGENERATEONLYME のある最初の投稿のみ処理
+	//for _j = _startindex; _j < _arraysize; _j ++ {
+	//	if STRSTR(C_LF + _G_TMP_DATAMETA[_j] + C_LF, C_LF + 'GENERATEONLYME' + C_LF, 0) >= 0 {
+	//		_startindex = _j - 1
+	//		_arraysize = _startindex + 1 + 1 + 1
+	//		if _startindex < 0 { _startindex = 0 }
+	//		break;
+	//	}
+	//}
+
+	//テスト
+	//最初だけ処理
+	//_startindex = 0; _arraysize = 1
+
+	for _j = _startindex; _j < _arraysize; _j ++ {
 		_fname=''
 
 		if STRSTR(C_LF + _G_TMP_DATAMETA[_j] + C_LF, C_LF + 'SKIPGENERATE' + C_LF, 0) >= 0 { continue; }
