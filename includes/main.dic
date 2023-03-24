@@ -23,6 +23,8 @@
 //-----------------------------------------------
 //public
 load{
+	C_TESTMODE = 0
+
 	//※処理時間計測でなく、各種処理時のユニークIDとして使っている
 	C_STARTTIME = GETTICKCOUNT()
 	G_LOG = ''
@@ -35,26 +37,44 @@ unload{
 	_t = GETTIME()
 	LOGGING2(C_LF + 'unload on '+_t[0]+'-'+_t[1]+'-'+_t[2]+' '+_t[4]+':'+_t[5]+':'+_t[6])
 
-	WRITEFILE(G_PROFILEDIRPATH + C_YEN + 'log.txt', G_LOG)
+	if ! C_TESTMODE {
+		WRITEFILE(G_PROFILEDIRPATH + C_YEN + 'log.txt', G_LOG)
+	}
 
 	ERASEVAR('G_PROFILEDIRPATH')
 	ERASEVAR('G_LOG')
 	ERASEVAR('C_STARTTIME')
+
+	ERASEVAR('C_TESTMODE')
 }
 
 request{
-	//_argv[0]はCR+LFで区切られたパラメータ一覧
-	//ただし最初の行は必ず「sinonome」という8バイトが入っている
-	G_EXECUTEPARAM = SPLIT(_argv[0], CHR(13) + C_LF)
-	sinonome_request(_argv[0])
-	ERASEVAR('G_EXECUTEPARAM')
+	// 頭にtest の5バイトがある場合はテストモード その後ろをそのままEVAL
+	// テスト用関数等を実行できる
+	// それ以外は普通に動作させる
+	if STRSTR(_argv[0], 'test ', 0) == 0 {
+		C_TESTMODE = 1
+		_fname = 'TESTMODE_LOG.TXT'
+		_argv[0] = ERASE(_argv[0], 0, 5)
+		_e = EVAL(_argv[0])
+		if FOPEN(_fname, 'a') {
+			FWRITE2(_fname, C_LF + TOSTR(_e))
+			FCLOSE(_fname)
+		}
+		_e
+	} else {
+		// sino.exeから呼ばれた場合_argv[0]はCR+LFで区切られたパラメータ一覧
+		//最初の行には必ず「sinonome」という8バイトが入っている
+		G_EXECUTEPARAM = SPLIT(_argv[0], CHR(13) + C_LF)
+		sinonome_request(_argv[0])
+		ERASEVAR('G_EXECUTEPARAM')
+	}
 }
 
 //sinonome独自のロギング
 LOGGING2 {
 	G_LOG += _argv[0] + C_LF
 }
-
 
 //配列の範囲チェックしてから配列から値を取り出す
 //a0 序数 a1- 配列
@@ -67,7 +87,6 @@ INDEXOF {
 		''
 	}
 }
-
 
 //-----------------------------------------------
 //a0 パラメータ(LF区切り)
@@ -202,20 +221,7 @@ sinonome_load{
 //-----------------------------------------------
 sinonome_request{
 
-
-	//_a = sinonome_load
-
-
-	//頭にtest の5バイトがある場合はテストモード その後ろをそのまま評価して返す
-	//各関数だけを直接実行できる
-	//それ以外は普通に動作させる
 	_t=GETTICKCOUNT()
-	//if _argv[0] && STRSTR(_argv[0],'test ',0) == 0{
-	//if STRSTR(_argv[0],'test ',0) == 0{
-	//	_argv[0]=ERASE(_argv[0],0,5)
-	//	EVAL(_argv[0])
-	//}else{
-	//		_a = SPLIT(_argv[0], CHR(13)+CHR(10));
 
 	for _i=1; _i < ARRAYSIZE(G_EXECUTEPARAM); _i++ {
 		LOGGING2("起動パラメータ("+_i+"): "+G_EXECUTEPARAM[_i])
@@ -231,9 +237,6 @@ sinonome_request{
 
 	sinonome_unload
 
-	//}
-
-	//_a = sinonome_unload
 
 }
 
