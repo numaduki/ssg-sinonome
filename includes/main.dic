@@ -299,7 +299,7 @@ sinonome_request_exec{
 			LOGGING2('-nat アーカイブテンプレートの処理をスキップしました')
 		} else {
 			LOGGING2('アーカイブテンプレートを処理しています..')
-			if !ArchiveTemplate_Output{
+			if !ArchiveTemplate_Output(_param){
 				'ARCHIVES TEMPLATE OUTPUT HAS SOMETHING ERROR'
 				return
 			} else {
