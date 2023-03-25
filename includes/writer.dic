@@ -43,7 +43,7 @@ ArchiveTemplate_Output_GlobalReplace{
 }
 
 ArchiveTemplate_Output_Entry_Webpage_Sub{
-	_resultfname = ''
+	_resultfname = IARRAY()
 	_archivemapping=_argv[0]
 	_i=_argv[1]
 	_type=_argv[2]
@@ -58,7 +58,7 @@ ArchiveTemplate_Output_Entry_Webpage_Sub{
 	_startindex = 0
 
 	//ヘッダにGENERATEONLYME のある最初の投稿のみ処理
-	//-ea-latestonlyより優先（要検討）
+	_enabled_flaggedonly = 0
 	if ASEARCH('-ea-flaggedonly', G_EXECUTEPARAM) >= 0 {
 		_flag = G_EXECUTEPARAM[ ASEARCH('-ea-flaggedonly', G_EXECUTEPARAM) + 1]
 		if (_flag) {
@@ -66,7 +66,7 @@ ArchiveTemplate_Output_Entry_Webpage_Sub{
 			for _j = _startindex; _j < _arraysize; _j ++ {
 				if STRSTR(C_LF + _G_TMP_DATAMETA[_j] + C_LF, C_LF + _flag + C_LF, 0) >= 0 {
 					_startindex = _j - 1
-					_arraysize = _startindex + 1 + 1 + 1
+					_arraysize = _startindex + 3
 					if _startindex < 0 { _startindex = 0 }
 					_exists = 1
 					break;
@@ -74,14 +74,21 @@ ArchiveTemplate_Output_Entry_Webpage_Sub{
 			}
 			if _exists {
 				LOGGING2('-ea-flaggedonly 記事のメタ情報に「'+_flag+'」を含む最初の投稿のみ出力・更新します')
+				_enabled_flaggedonly = 1
 			} else {
-				LOGGING2('-ea-flaggedonly 記事のメタ情報に「'+_flag+'」を含む投稿が見つかりません')
-				_arraysize = 0 //処理対象なし
+				LOGGING2('-ea-flaggedonly 記事のメタ情報に「'+_flag+'」を含む投稿が見つからないため、他の起動パラメータを使用します')
 			}
 		}
-	} elseif ASEARCH('-ea-latestonly', G_EXECUTEPARAM) >= 0 {
-		LOGGING2('-ea-latestonly 日付が最も新しい投稿とその直後の投稿のみ記事アーカイブを出力・更新します')
-		_startindex = 0; _arraysize = 1 + 1// 次の記事まで出力（次・前の投稿へのリンクが更新されるように）
+	}
+
+	if ! _enabled_flaggedonly {
+		if ASEARCH('-ea-latestonly', G_EXECUTEPARAM) >= 0 {
+			LOGGING2('-ea-latestonly 日付が最も新しい投稿とその直後の投稿のみ記事アーカイブを出力・更新します')
+			_startindex = 0; _arraysize = 2// 次の記事まで出力（次・前の投稿へのリンクが更新されるように）
+		} elseif ASEARCH('-ea-firstonly', G_EXECUTEPARAM) >= 0 {
+			LOGGING2('-ea-firstonly 記事ファイルの最も上にある投稿とその直後の投稿のみ記事アーカイブを出力・更新します')
+			_startindex = 0; _arraysize = 2// 次の記事まで出力（次・前の投稿へのリンクが更新されるように）
+		}
 	}
 
 	for _j = _startindex; _j < _arraysize; _j ++ {
@@ -161,16 +168,28 @@ ArchiveTemplate_Output_Entry_Webpage_Sub{
 //					FCLOSE(_fname);
 //				}
 			}
-			//if _j == _startindex && ASEARCH('-ea-latestonly', G_EXECUTEPARAM) >= 0 {
-			if ! _resultfname {
-				_resultfname = _fname
-			}
+
+			//if _enabled_flaggedonly {
+			//} else {
+				//if ! _resultfname {
+				//	_resultfname = _fname
+				//}
+			//}
+			_resultfname ,= _fname
 		}else{
 			//ファイル名ないので出力できない
 		}
 	}
 	if _resultfname {
-		G_RESULT = _resultfname
+		if _enabled_flaggedonly {
+			if _startindex == 0 {
+				G_RESULT = _resultfname[0]
+			} else {
+				G_RESULT = _resultfname[1]
+			}
+		} else {
+			G_RESULT = _resultfname[0]
+		}
 	}
 	//LOGGING2("EW "+G_RESULT)
 	1

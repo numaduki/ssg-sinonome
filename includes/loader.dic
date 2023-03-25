@@ -145,6 +145,8 @@ Entries_Webpages_Load_Sub{
 
 	//_iolog_set_on = ( GETSETTING('iolog') == 'on' )
 
+	_e_firstonly = (_argv[0] == 'entry' && ASEARCH('-ea-firstonly', G_EXECUTEPARAM) >= 0 && ASEARCH('-ea-flaggedonly', G_EXECUTEPARAM) < 0) // flaggedonly時は全部読む必要がある
+
 	for _i = 0; _i < ARRAYSIZE(_array_datafile_fullpath); _i ++ {
 		_fpath = _array_datafile_fullpath[_i]
 		_fname = G_TMP_DATAFILES_NAME[_i]
@@ -499,6 +501,10 @@ Entries_Webpages_Load_Sub{
 				_tosibango ++
 
 				_cnt++
+
+				// 起動パラメータ -ea-firstonly で最初の2件のみ読み込み
+				if _e_firstonly && _tosibango >= 2 { break }
+
 			}
 			G_TMP_DATAFILES_DATACOUNT ,= _cnt//ARRAYSIZE(_entries)
 			_r=1
@@ -511,6 +517,9 @@ Entries_Webpages_Load_Sub{
 			LOGGING2('ファイルを読み込めません：' + _fpath)
 			continue
 		}
+
+		if _e_firstonly && _tosibango >= 2 { break }
+
 	}
 
 	//if _iolog_set_on { _a = SETSETTING('iolog', 'on') }
